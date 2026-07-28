@@ -1,0 +1,50 @@
+{
+  "vacuum_box": {
+    "name": "The Floating Box",
+    "description": "A box floats motionless inside a vacuum chamber, with nothing touching it.",
+    "questions": [
+      {
+        "id": 1,
+        "prompt": "A box floats motionless in a vacuum. What net force acts on it?",
+        "answer": "zero"
+      },
+      {
+        "id": 2,
+        "prompt": "If the box is motionless, what does that tell you about the forces acting on it?",
+        "answer": "balanced"
+      }
+    ]
+  },
+  "sinking_stone": {
+    "name": "The Sinking Stone",
+    "description": "A stone released underwater sinks at a constant speed and never gets any faster.",
+    "questions": [
+      {
+        "id": 1,
+        "prompt": "A stone sinks through water at a constant speed, never speeding up. What does that tell you about the net force on it?",
+        "answer": "zero"
+      },
+      {
+        "id": 2,
+        "prompt": "If the net force is zero, what must be true about gravity pulling it down versus drag pushing up?",
+        "answer": "balanced"
+      }
+    ]
+  },
+  "hot_cold_chairs": {
+    "name": "Two Chairs, Same Temperature",
+    "description": "A metal chair and a wooden chair sit in the same room, but the metal one feels colder to the touch.",
+    "questions": [
+      {
+        "id": 1,
+        "prompt": "The metal chair feels colder than the wooden one, even though both are the same temperature. What property of the material is actually different?",
+        "answer": "conductivity"
+      },
+      {
+        "id": 2,
+        "prompt": "If both chairs are the same temperature, what is really different about how fast heat leaves your hand when you touch each one?",
+        "answer": "rate"
+      }
+    ]
+  }
+}
