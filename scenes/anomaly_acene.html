@@ -46,11 +46,22 @@
   </style>
 </head>
 <body>
+  <!-- Full-iframe color-flash overlay, on top of the 3D canvas. This is a
+       deliberate belt-and-suspenders addition: on its own, tweening 3D fog/
+       light values can be too subtle to read at a glance, so this gives
+       every reaction one guaranteed-visible moment regardless of camera
+       distance or lighting angle. -->
+  <div id="reactionFlash" style="
+    position:fixed; inset:0; pointer-events:none; z-index:10;
+    background:radial-gradient(circle at 50% 55%, transparent 35%, currentColor 145%);
+    opacity:0; color:#2dd6e0;
+  "></div>
   <script>
     // Three.js (r128) and GSAP are inlined by ui/scene_viewer.py ahead of
     // this <script> block, from the vendored copies in static/vendor/ --
     // no CDN, matching boot.html / command_center.html.
     const REACTION_VERDICT = "__REACTION_VERDICT__"; // resolved | thin | wrong | ""
+    const flashEl = document.getElementById("reactionFlash");
     // ---- 1. SCENE ---------------------------------------------------
     // An empty 3D stage. We also give it a background color that matches
     // the dark "diagnostic terminal" theme used everywhere else in the app.
@@ -97,6 +108,8 @@
       color: 0x2dd6e0,
       metalness: 0.3,
       roughness: 0.4,
+      emissive: 0x000000,
+      emissiveIntensity: 1,
     });
     const box = new THREE.Mesh(geometry, material);
     scene.add(box);
@@ -133,26 +146,46 @@
     const reactionState = { speed: 1 };
 
     function stabilize() {
-      // "resolved": fog thins slightly, accent light brightens, motion slows.
-      gsap.to(scene.fog, { density: BASE_FOG_DENSITY * 0.5, duration: 1.2, ease: "power2.out" });
-      gsap.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 1.6, duration: 1.2, ease: "power2.out" });
-      gsap.to(reactionState, { speed: 0.4, duration: 1.2, ease: "power2.out" });
+      // "resolved": one confirming glow pulse (material + screen flash +
+      // gentle scale breathe), accent light brightens and holds, fog
+      // thins noticeably, motion eases down to a slow, calm drift.
+      flashEl.style.color = "#2dd6e0";
+      gsap.fromTo(flashEl, { opacity: 0 }, { opacity: 0.45, duration: 0.25, yoyo: true, repeat: 1, ease: "power1.inOut" });
+      gsap.fromTo(material.emissive, { r: 0, g: 0, b: 0 }, {
+        r: 0.05, g: 0.55, b: 0.58, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut",
+      });
+      gsap.to(box.scale, { x: 1.18, y: 1.18, z: 1.18, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut" });
+      gsap.to(scene.fog, { density: BASE_FOG_DENSITY * 0.25, duration: 1.2, ease: "power2.out" });
+      gsap.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 3.2, duration: 0.5, ease: "power2.out" });
+      gsap.to(reactionState, { speed: 0.15, duration: 1.2, ease: "power2.out" });
     }
 
     function destabilize() {
-      // "thin"/"wrong": a brief shudder/flicker + thicker fog, then eases
-      // back to the neutral baseline after ~1.5s. An urgent nudge, not a
-      // punishment -- no red flash, no shaming visuals.
+      // "thin"/"wrong": an urgent amber shudder -- box jitters in position
+      // and rotation, material flickers amber, screen flashes amber, fog
+      // thickens -- then everything eases back to the neutral baseline by
+      // ~1.5s. Amber (this app's existing "warning" color), not red, and
+      // no "fail" text -- reads as a nudge, not a punishment.
+      flashEl.style.color = "#fbbf24";
+      const baseX = box.position.x, baseZ = box.position.z;
       const shudder = gsap.timeline();
-      shudder.to(scene.fog, { density: BASE_FOG_DENSITY * 1.8, duration: 0.15 }, 0);
-      shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 0.3, duration: 0.1, repeat: 3, yoyo: true }, 0);
+      shudder.to(flashEl, { opacity: 0.4, duration: 0.08, repeat: 3, yoyo: true }, 0);
+      shudder.to(material.emissive, { r: 0.6, g: 0.35, b: 0, duration: 0.08, repeat: 3, yoyo: true }, 0);
+      shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 0.2, duration: 0.08, repeat: 3, yoyo: true }, 0);
+      shudder.to(scene.fog, { density: BASE_FOG_DENSITY * 2.4, duration: 0.15 }, 0);
       shudder.to(box.rotation, {
-        z: box.rotation.z + 0.18, duration: 0.08, repeat: 5, yoyo: true, ease: "power1.inOut",
+        z: box.rotation.z + 0.28, duration: 0.07, repeat: 6, yoyo: true, ease: "power1.inOut",
       }, 0);
-      shudder.to(reactionState, { speed: 1.8, duration: 0.15 }, 0);
+      shudder.to(box.position, {
+        x: baseX + 0.15, z: baseZ + 0.1, duration: 0.06, repeat: 6, yoyo: true, ease: "power1.inOut",
+      }, 0);
+      shudder.to(reactionState, { speed: 2.2, duration: 0.15 }, 0);
       // Settle back to the neutral baseline by ~1.5s total.
+      shudder.to(flashEl, { opacity: 0, duration: 1.0, ease: "power2.out" }, 0.5);
+      shudder.to(material.emissive, { r: 0, g: 0, b: 0, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(scene.fog, { density: BASE_FOG_DENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
+      shudder.to(box.position, { x: baseX, z: baseZ, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(reactionState, { speed: 1, duration: 1.0, ease: "power2.out" }, 0.5);
     }
 
