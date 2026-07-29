@@ -12,6 +12,9 @@ from logic.streak_engine import (
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
+from ui.styles import inject_custom_css
+
+inject_custom_css()
 
 st.title("Prometheus Lab — Anomaly Room (Phase 5 Prototype)")
 
