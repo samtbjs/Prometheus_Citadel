@@ -13,9 +13,31 @@ from logic.streak_engine import (
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
 from ui.styles import inject_custom_css
-from ui.scene_viewer import render_anomaly_scene
+from ui.scene_viewer import render_anomaly_scene, render_boot_scene, render_command_center_scene
 
 inject_custom_css()
+
+# ---------------------------------------------------------------------
+# MILESTONE 1 — new opening scene, gating entry into the existing app.
+# "intro_stage" is a separate flag from the existing "view" state below
+# on purpose, so this doesn't touch the menu/anomaly_room logic at all.
+# ---------------------------------------------------------------------
+if "intro_stage" not in st.session_state:
+    st.session_state.intro_stage = "boot"
+
+if st.session_state.intro_stage == "boot":
+    render_boot_scene()
+    if st.button("ENTER FACILITY"):
+        st.session_state.intro_stage = "command_center"
+        st.rerun()
+    st.stop()
+
+if st.session_state.intro_stage == "command_center":
+    render_command_center_scene()
+    if st.button("Continue to Anomaly Log"):
+        st.session_state.intro_stage = "done"
+        st.rerun()
+    st.stop()
 
 st.title("Prometheus Lab")
 

@@ -1,0 +1,92 @@
+<div id="cc-root" style="position:relative;width:100%;height:100%;background:#05080a;overflow:hidden;font-family:'Share Tech Mono','Courier New',monospace;">
+  <canvas id="cc-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;"></canvas>
+  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding-top:18px;pointer-events:none;">
+    <div style="color:#2dd6e0;letter-spacing:4px;font-size:15px;font-weight:700;text-shadow:0 0 12px rgba(45,214,224,0.6);">RESEARCH COMMAND CENTER</div>
+    <div id="cc-stations" style="display:flex;gap:16px;margin-top:auto;margin-bottom:22px;">
+      <!-- mock/hardcoded chapter data — no anomalies.json read yet -->
+      <div class="cc-station" style="opacity:0;border:1px solid #2dd6e0;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(45,214,224,0.06);">
+        <div style="color:#2dd6e0;font-size:12px;letter-spacing:1px;">UNLOCKED</div>
+        <div style="color:#e6f1f3;font-size:14px;margin-top:4px;">Fundamental Forces</div>
+      </div>
+      <div class="cc-station" style="opacity:0;border:1px solid #3a4650;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(255,255,255,0.03);">
+        <div style="color:#8aa0aa;font-size:12px;letter-spacing:1px;">LOCKED</div>
+        <div style="color:#8aa0aa;font-size:14px;margin-top:4px;">Energy &amp; Heat</div>
+      </div>
+      <div class="cc-station" style="opacity:0;border:1px solid #3a4650;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(255,255,255,0.03);">
+        <div style="color:#8aa0aa;font-size:12px;letter-spacing:1px;">LOCKED</div>
+        <div style="color:#8aa0aa;font-size:14px;margin-top:4px;">Space-Time</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('cc-root');
+  var canvas = document.getElementById('cc-canvas');
+  var w = root.clientWidth || 700, h = root.clientHeight || 420;
+
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x05080a, 0.05);
+
+  var camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+  camera.position.set(0, 2.4, 5.2);
+  camera.lookAt(0, 0, 0);
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  if (THREE.ACESFilmicToneMapping) renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+  scene.add(new THREE.AmbientLight(0x0a2226, 0.6));
+  var key = new THREE.DirectionalLight(0x445566, 0.35);
+  key.position.set(2, 4, 3);
+  scene.add(key);
+  var accent = new THREE.PointLight(0x2dd6e0, 1.6, 10);
+  accent.position.set(0, 0.6, 0);
+  scene.add(accent);
+
+  var table = new THREE.Mesh(
+    new THREE.TorusGeometry(1.6, 0.04, 16, 64),
+    new THREE.MeshStandardMaterial({ color: 0x0b2a2d, emissive: 0x2dd6e0, emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.4 })
+  );
+  table.rotation.x = Math.PI / 2;
+  scene.add(table);
+
+  var core = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.4, 0),
+    new THREE.MeshStandardMaterial({ color: 0x0b2a2d, emissive: 0x2dd6e0, emissiveIntensity: 1.2, metalness: 0.3, roughness: 0.3 })
+  );
+  scene.add(core);
+
+  function render() { renderer.render(scene, camera); }
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var stations = document.querySelectorAll('.cc-station');
+
+  if (reduceMotion) {
+    stations.forEach(function (el) { el.style.opacity = 1; });
+    render();
+  } else {
+    gsap.to(stations, { opacity: 1, duration: 0.5, stagger: 0.15, delay: 0.3, ease: 'power1.out' });
+  }
+
+  (function loop() {
+    if (!reduceMotion) {
+      table.rotation.z += 0.0025;
+      core.rotation.y += 0.006;
+      core.rotation.x += 0.003;
+    }
+    render();
+    requestAnimationFrame(loop);
+  })();
+
+  window.addEventListener('resize', function () {
+    var nw = root.clientWidth, nh = root.clientHeight;
+    camera.aspect = nw / nh;
+    camera.updateProjectionMatrix();
+    renderer.setSize(nw, nh);
+    render();
+  });
+})();
+</script>

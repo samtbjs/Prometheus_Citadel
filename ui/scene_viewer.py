@@ -67,6 +67,75 @@ def _render_2d_fallback():
     )
 
 
+# ---------------------------------------------------------------------
+# MILESTONE 1 — opening scene (Facility Boot Sequence -> Command Center).
+# Everything below is new and does not alter anything above this line.
+#
+# Three.js/GSAP are vendored locally (static/vendor/) per the Build Spec
+# no-CDN requirement. components.html() renders each scene inside a
+# sandboxed iframe with no access to the local filesystem, so the vendor
+# files can't be loaded via a plain <script src="..."> pointed at disk --
+# instead we read their contents once and inline them as <script> blocks
+# ahead of the scene's own markup/JS.
+# ---------------------------------------------------------------------
+_VENDOR_DIR = os.path.join(_PROJECT_ROOT, "static", "vendor")
+_SCENES_DIR = os.path.join(_PROJECT_ROOT, "scenes")
+
+
+def _read_file(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _render_intro_fallback(label, height):
+    """Plain-CSS stand-in shown if a vendor file or scene file is missing
+    or unreadable, so a broken asset never shows a blank iframe."""
+    components.html(
+        f"""
+        <div style="display:flex;align-items:center;justify-content:center;
+            width:100%;height:100%;box-sizing:border-box;background:#05080a;
+            font-family:monospace;">
+          <div style="border:1px solid #2dd6e0;border-radius:6px;
+              padding:20px 24px;color:#e6f1f3;text-align:center;">
+            <div style="color:#2dd6e0;font-weight:bold;letter-spacing:1px;">
+              [ {label} — VISUAL FEED OFFLINE ]
+            </div>
+          </div>
+        </div>
+        """,
+        height=height,
+    )
+
+
+def _render_vendored_scene(scene_filename, label, height=420):
+    """Inlines static/vendor/three.min.js + gsap.min.js ahead of a scene
+    HTML file from scenes/, then renders it via components.html. Falls
+    back to a 2D placeholder if any file is missing/unreadable."""
+    try:
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        scene_html = _read_file(os.path.join(_SCENES_DIR, scene_filename))
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more scene assets are empty.")
+    except (OSError, ValueError):
+        _render_intro_fallback(label, height)
+        return
+
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=height)
+
+
+def render_boot_scene():
+    """Stage: boot — the power-core-igniting opening moment."""
+    _render_vendored_scene("boot.html", "BOOT SEQUENCE", height=420)
+
+
+def render_command_center_scene():
+    """Stage: command_center — hardcoded/mock 3-chapter station list,
+    no anomalies.json read yet (per Milestone 1 mock-data requirement)."""
+    _render_vendored_scene("command_center.html", "COMMAND CENTER", height=420)
+
+
 def render_anomaly_scene():
     """Read scenes/anomaly_acene.html and render it as a live 3D scene,
     falling back to a 2D description if the file can't be read for any
