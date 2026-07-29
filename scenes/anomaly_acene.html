@@ -133,22 +133,37 @@
     fillLight.position.set(-4, -2, -3);
     scene.add(fillLight);
 
-    // ---- Render ONE frame -------------------------------------------------
-    // Phase 7a is intentionally static (no animation loop yet -- that's
-    // Phase 7b). Calling render() one single time is enough to draw the
-    // box, lit, at its current fixed position, and leave it on screen.
-    renderer.render(scene, camera);
+    // ---- Phase 7b: Animation loop -----------------------------------------
+    // Browsers can't run our code and repaint the screen at the same time --
+    // requestAnimationFrame(fn) asks the browser "call fn right before your
+    // next repaint," which is why it's used instead of e.g. calling render()
+    // on a setInterval timer: it stays in sync with the screen's own refresh
+    // rate (usually 60 times/second), so motion looks smooth and doesn't
+    // waste work drawing frames the screen isn't ready to show yet.
+    const baseY = box.position.y;
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Slow tumble: tiny angle added every frame, forever.
+      box.rotation.y += 0.0035;
+      box.rotation.x += 0.0015;
+
+      // Gentle up/down drift using a sine wave, so it eases back and forth
+      // rather than moving at a constant speed like a bouncing ball would.
+      box.position.y = baseY + Math.sin(Date.now() * 0.0006) * 0.12;
+
+      renderer.render(scene, camera);
+    }
+    animate();
 
     // ---- Keep it looking right if the iframe itself gets resized -------
-    // This does NOT animate the box -- it only redraws the same static
-    // frame if the browser window changes size, so the box doesn't look
-    // stretched or off-center. This is a one-line safety net, not
-    // animation logic.
+    // No renderer.render() call is needed here anymore -- the animate()
+    // loop above already redraws every frame on its own, so it will pick
+    // up the new size/aspect on its very next frame automatically.
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.render(scene, camera);
     });
   </script>
 </body>
