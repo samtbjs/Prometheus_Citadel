@@ -1,3 +1,5 @@
+import uuid
+
 import streamlit as st
 from logic.streak_engine import (
     load_anomalies,
@@ -26,6 +28,18 @@ anomaly_ids = list(anomalies.keys())
 if "progress" not in st.session_state:
     st.session_state.progress = load_progress()
 
+# -----------------------------------------------------------------------
+# PHASE 4 FIX: messages (like "Correct!" or an AI-error warning) used to
+# vanish almost instantly. That's because every Submit click calls
+# st.rerun() to refresh the streak/question -- and Streamlit throws away
+# any st.info/st.warning/st.error the moment it reruns. So instead of
+# printing a message once and hoping it survives, we now save messages
+# here in session_state and redraw them on every rerun until the
+# student clicks the "✕" button to dismiss them.
+# -----------------------------------------------------------------------
+if "feedback_messages" not in st.session_state:
+    st.session_state.feedback_messages = []
+
 # A dropdown so the student can choose which Anomaly to work on.
 selected_id = st.selectbox(
     "Choose an Anomaly:",
@@ -43,11 +57,29 @@ if st.session_state.get("current_anomaly") != selected_id:
     st.session_state.question_index = saved["question_index"]
     st.session_state.streak = saved["streak"]
     st.session_state.cleared = saved["cleared"]
+    st.session_state.feedback_messages = []  # old anomaly's messages don't carry over
 
 anomaly = anomalies[selected_id]
 questions = anomaly["questions"]
 
 st.caption(anomaly["description"])
+
+# -----------------------------------------------------------------------
+# Redraw any messages saved from the last Submit click, each with its own
+# ✕ button. Clicking ✕ removes just that one message and reruns, so the
+# rest stay put. Messages stay on screen indefinitely otherwise -- no
+# more disappearing after a few seconds.
+# -----------------------------------------------------------------------
+for msg in list(st.session_state.feedback_messages):
+    col_text, col_close = st.columns([20, 1])
+    with col_text:
+        getattr(st, msg["kind"])(msg["text"])
+    with col_close:
+        if st.button("✕", key=f"dismiss_{msg['id']}"):
+            st.session_state.feedback_messages = [
+                m for m in st.session_state.feedback_messages if m["id"] != msg["id"]
+            ]
+            st.rerun()
 
 if st.session_state.cleared:
     st.success("🎉 Anomaly Cleared!")
@@ -110,13 +142,20 @@ else:
     )
 
     if st.button("Submit"):
+        # Messages from THIS submission. We build a fresh list each time
+        # rather than adding onto the old one, so a new Submit naturally
+        # replaces the previous round's feedback -- but each message you
+        # see is still yours to dismiss (or leave up) independently.
+        new_messages = []
+
         if is_vacuum_box:
             # Grade the NUMBER with real physics, not string matching.
             force_is_correct = check_vacuum_box_force(student_force)
-            if force_is_correct:
-                st.info(vacuum_box_feedback(student_force))
-            else:
-                st.warning(vacuum_box_feedback(student_force))
+            new_messages.append({
+                "id": str(uuid.uuid4()),
+                "kind": "info" if force_is_correct else "warning",
+                "text": vacuum_box_feedback(student_force),
+            })
 
         # -------------------------------------------------------------
         # Decide the explanation-quality verdict. This applies to ALL
@@ -138,10 +177,14 @@ else:
                 # We never let this crash the app -- we tell the student
                 # plainly what happened and fall back to the mock
                 # dropdown's value for this one submission only.
-                st.error(
-                    f"⚠️ Couldn't reach the real AI tutor ({error}). "
-                    "Falling back to the mock verdict for this submission."
-                )
+                new_messages.append({
+                    "id": str(uuid.uuid4()),
+                    "kind": "error",
+                    "text": (
+                        f"⚠️ Couldn't reach the real AI tutor ({error}). "
+                        "Falling back to the mock verdict for this submission."
+                    ),
+                })
                 explanation_verdict = fake_verdict
 
         if is_vacuum_box:
@@ -153,6 +196,17 @@ else:
             verdict = explanation_verdict if force_is_correct else "wrong"
         else:
             verdict = explanation_verdict
+
+        # A small bonus: spell out the verdict itself so it's always
+        # clear what just happened, not just inferred from the streak.
+        verdict_kind = {"resolved": "success", "thin": "warning", "wrong": "error"}[verdict]
+        new_messages.append({
+            "id": str(uuid.uuid4()),
+            "kind": verdict_kind,
+            "text": f"AI verdict on your explanation: **{verdict}**",
+        })
+
+        st.session_state.feedback_messages = new_messages
 
         st.session_state.streak = update_streak(st.session_state.streak, verdict)
         st.session_state.question_index = (st.session_state.question_index + 1) % len(questions)
