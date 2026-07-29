@@ -9,8 +9,9 @@ from logic.streak_engine import (
     is_anomaly_cleared,
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
+from ai.tutor import judge_explanation
 
-st.title("Prometheus Lab — Anomaly Room (Phase 3 Prototype)")
+st.title("Prometheus Lab — Anomaly Room (Phase 4 Prototype)")
 
 # ---------------------------------------------------------------------------
 # Load the list of Anomalies from data/anomalies.json every time the app
@@ -91,9 +92,20 @@ else:
 
     explanation = st.text_area("Explain your reasoning in one sentence:", key=explanation_key)
 
-    # Phase 1/2: fake the AI verdict with a dropdown instead of a real API call
+    # -----------------------------------------------------------------
+    # PHASE 4: the old Phase 1/2 dropdown is now a permanent SAFETY NET
+    # rather than the only option. By default this checkbox is OFF,
+    # which means the app calls the real GPT-4o mini AI (below) to judge
+    # the explanation. If you check this box, the app skips the real AI
+    # call entirely and goes back to using the dropdown's value instead
+    # -- handy if you're out of API budget or just want to test quickly.
+    # -----------------------------------------------------------------
+    use_mock = st.checkbox(
+        "Use mock verdict instead of real AI (fallback if API fails or I'm low on budget)"
+    )
     fake_verdict = st.selectbox(
-        "Mock AI verdict (stand-in for real AI later):",
+        "Mock AI verdict (used only when the checkbox above is checked, "
+        "or automatically if the real AI call fails):",
         ["resolved", "thin", "wrong"],
     )
 
@@ -106,15 +118,41 @@ else:
             else:
                 st.warning(vacuum_box_feedback(student_force))
 
-            # The real calculation always has the final say on the
-            # numeric part: if the force value is wrong, the verdict is
-            # "wrong" no matter what the mock-AI dropdown says. If the
-            # force value is right, we still fall back to the mock-AI
-            # dropdown to judge the quality of the written explanation
-            # (that's the part real AI will grade in a later phase).
-            verdict = fake_verdict if force_is_correct else "wrong"
+        # -------------------------------------------------------------
+        # Decide the explanation-quality verdict. This applies to ALL
+        # THREE Anomalies -- even vacuum_box, which additionally has
+        # its own separate real numeric force check above.
+        # -------------------------------------------------------------
+        if use_mock:
+            explanation_verdict = fake_verdict
         else:
-            verdict = fake_verdict
+            try:
+                explanation_verdict = judge_explanation(
+                    question_prompt=q["prompt"],
+                    expected_concept=q["answer"],
+                    student_explanation=explanation,
+                )
+            except Exception as error:
+                # Covers things like: no internet, invalid/missing API
+                # key, rate limits, or any other unexpected API problem.
+                # We never let this crash the app -- we tell the student
+                # plainly what happened and fall back to the mock
+                # dropdown's value for this one submission only.
+                st.error(
+                    f"⚠️ Couldn't reach the real AI tutor ({error}). "
+                    "Falling back to the mock verdict for this submission."
+                )
+                explanation_verdict = fake_verdict
+
+        if is_vacuum_box:
+            # The real numeric calculation always has the final say: if
+            # the force value is wrong, the verdict is "wrong" no matter
+            # how good the written explanation was. If the force value
+            # is right, the explanation-quality verdict (real AI, or the
+            # mock fallback) decides resolved/thin/wrong.
+            verdict = explanation_verdict if force_is_correct else "wrong"
+        else:
+            verdict = explanation_verdict
 
         st.session_state.streak = update_streak(st.session_state.streak, verdict)
         st.session_state.question_index = (st.session_state.question_index + 1) % len(questions)

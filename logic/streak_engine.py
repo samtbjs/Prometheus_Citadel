@@ -91,11 +91,24 @@ def mock_tag_explanation(tag_choice):
 
 
 def update_streak(current_streak, tag):
-    """Returns the new streak count based on the verdict tag."""
+    """
+    Returns the new streak count based on the verdict tag.
+
+    PHASE 4 BUG FIX:
+    Previously, "thin" and "wrong" were both treated as a full reset to 0.
+    That was wrong. The correct behavior is:
+      - "resolved"        -> streak goes UP by 1 (clearly understood it)
+      - "thin"            -> streak stays THE SAME (not confidently right,
+                              not confidently wrong -- so we don't punish
+                              or reward it, we just ask again)
+      - "wrong"/"wrong idea" -> streak resets to 0 (misunderstanding)
+    """
     if tag == "resolved":
         return current_streak + 1
+    elif tag == "thin":
+        return current_streak  # unchanged
     else:
-        return 0  # thin or wrong resets the streak
+        return 0  # "wrong" (or "wrong idea") resets the streak
 
 
 def is_anomaly_cleared(streak):
