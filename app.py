@@ -66,6 +66,14 @@ if "progress" not in st.session_state:
 if "feedback_messages" not in st.session_state:
     st.session_state.feedback_messages = []
 
+# THIS MILESTONE: the most recent verdict for the current Anomaly, so the
+# Anomaly Chamber scene can react to it (calm/stabilize on "resolved",
+# shudder/destabilize on "thin"/"wrong"). None = no submission yet this
+# visit -> scene stays neutral. Reset whenever a new Anomaly is entered,
+# in _enter_anomaly() below.
+if "last_verdict" not in st.session_state:
+    st.session_state.last_verdict = None
+
 # -----------------------------------------------------------------------
 # PHASE 8: which screen is showing right now. "menu" = new Home Menu.
 # "anomaly_room" = the existing question/streak/3D-scene screen. Defaults
@@ -86,6 +94,7 @@ def _enter_anomaly(anomaly_id):
     st.session_state.streak = saved["streak"]
     st.session_state.cleared = saved["cleared"]
     st.session_state.feedback_messages = []
+    st.session_state.last_verdict = None
     st.session_state.view = "anomaly_room"
 
 
@@ -129,7 +138,7 @@ st.caption(anomaly["description"])
 # deliberately NOT part of this step -- see ui/scene_viewer.py.
 # -----------------------------------------------------------------------
 if selected_id == "vacuum_box":
-    render_anomaly_scene()
+    render_anomaly_scene(verdict=st.session_state.last_verdict)
 
 # -----------------------------------------------------------------------
 # Redraw any messages saved from the last Submit click, each with its own
@@ -297,6 +306,7 @@ else:
         })
 
         st.session_state.feedback_messages = new_messages
+        st.session_state.last_verdict = verdict
 
         st.session_state.streak = update_streak(st.session_state.streak, verdict)
         st.session_state.question_index = (st.session_state.question_index + 1) % len(questions)

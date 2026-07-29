@@ -56,14 +56,16 @@ FRAGILITY WARNING (read this if something doesn't render right):
 
 import streamlit as st
 
-CUSTOM_CSS = """
-<style>
+from ui.design_tokens import BG_VOID, TEXT_MAIN, TEXT_DIM, CHAPTER_1_ACCENT
 
-/* ---- Fonts ---------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap');
-
-:root {
-    --accent: #2dd6e0;
+# NOTE (this milestone): styles.py now reads its palette from
+# design_tokens.py instead of hardcoding the same hex values a second
+# time, so there's one single source of truth. Chapter-2/3 accents in
+# design_tokens.py stay unused here on purpose -- only Chapter 1 (cyan)
+# is in scope right now.
+_ROOT_VARS = f"""
+:root {{
+    --accent: {CHAPTER_1_ACCENT};
     --accent-glow: rgba(45, 214, 224, 0.55);
     --accent-dim: rgba(45, 214, 224, 0.18);
     --panel-bg: rgba(255, 255, 255, 0.035);
@@ -71,8 +73,26 @@ CUSTOM_CSS = """
     --success: #4ade80;
     --warning: #fbbf24;
     --error: #f87171;
-    --text-main: #e6f1f3;
-    --text-dim: #8aa0aa;
+    --text-main: {TEXT_MAIN};
+    --text-dim: {TEXT_DIM};
+    --bg-void: {BG_VOID};
+}}
+"""
+
+CUSTOM_CSS = """
+<style>
+
+/* ---- Fonts ---------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap');
+
+""" + _ROOT_VARS + """
+
+/* ---- Cleanup item 2: hide Streamlit's own dev toolbar (Deploy button,
+   hamburger menu, "Made with Streamlit" footer) so it never shows in the
+   shipped game, same as any polished Streamlit app. ---- */
+#MainMenu, header[data-testid="stHeader"], footer {
+    visibility: hidden;
+    height: 0;
 }
 
 /* Apply the monospace "terminal" font everywhere by default ... */

@@ -1,24 +1,14 @@
 """
-Phase 7c — adds failure-safe fallback around the working Phase 7b scene.
+render_anomaly_scene() renders scenes/anomaly_acene.html the same way
+render_boot_scene()/render_command_center_scene() below render their
+scenes: Three.js + GSAP are read from static/vendor/ and inlined as
+<script> tags ahead of the scene's own markup, so nothing is ever
+fetched from a CDN inside the iframe (per this project's no-CDN rule).
 
-WHY THIS IS ITS OWN FILE: unchanged from Phase 7a -- see history for that
-reasoning. This phase only adds error-handling; it does not touch the
-animation, camera, lighting, or box appearance from Phase 7b.
-
-THE TWO FAILURE MODES THIS PHASE HANDLES (and why BOTH are needed):
-1. PYTHON-SIDE failure: scenes/anomaly_acene.html is missing, unreadable,
-   or empty. Python can detect this directly (it's the thing trying to
-   open the file), so it's handled here with a plain try/except.
-2. BROWSER-SIDE failure: the file reads fine in Python and gets handed
-   to the iframe, but the browser then fails to download Three.js from
-   its CDN (no internet, firewall, CDN outage, etc). Python has already
-   finished its job by this point and has no way to see into the
-   browser/iframe -- so this failure can ONLY be caught by JavaScript
-   running inside the HTML file itself. That check lives in
-   scenes/anomaly_acene.html (a setTimeout that looks for `THREE` being
-   undefined and swaps in a 2D fallback if so).
-Together, these two checks cover "the file itself is the problem" and
-"the file is fine but the network inside the browser is the problem."
+FAILURE HANDLING: if any of the three files (three.min.js, gsap.min.js,
+scenes/anomaly_acene.html) is missing, unreadable, or empty, Python
+catches that directly (it's the thing trying to open the files) and
+falls back to a plain 2D description card instead of a blank iframe.
 """
 
 import os
@@ -136,22 +126,32 @@ def render_command_center_scene():
     _render_vendored_scene("command_center.html", "COMMAND CENTER", height=420)
 
 
-def render_anomaly_scene():
+def render_anomaly_scene(verdict=None):
     """Read scenes/anomaly_acene.html and render it as a live 3D scene,
     falling back to a 2D description if the file can't be read for any
     reason. See module docstring for the two failure modes this covers.
+
+    verdict: one of "resolved" / "thin" / "wrong" / None. None means "no
+    submission yet this visit" -- the scene stays neutral (just the idle
+    drift/tumble). Baked into the HTML as a JS constant the scene reads
+    on load; see scenes/anomaly_acene.html's "LIVE REACTIONS" note for why
+    this doesn't need any live Python<->iframe messaging.
     """
     if FORCE_FALLBACK_FOR_TESTING:
         _render_2d_fallback()
         return
 
     try:
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
         with open(SCENE_FILE_PATH, "r", encoding="utf-8") as scene_file:
             scene_html = scene_file.read()
-        if not scene_html.strip():
-            raise ValueError("Scene file is empty.")
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more scene assets are empty.")
     except (OSError, ValueError):
         _render_2d_fallback()
         return
 
-    components.html(scene_html, height=SCENE_HEIGHT_PX)
+    scene_html = scene_html.replace("__REACTION_VERDICT__", verdict or "")
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=SCENE_HEIGHT_PX)

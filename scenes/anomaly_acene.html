@@ -1,42 +1,29 @@
 <!--
-  Phase 7a — Prometheus Lab 3D Scene (vacuum_box Anomaly only)
+  Prometheus Lab 3D Scene — vacuum_box Anomaly.
 
   WHAT THIS FILE IS:
   A completely self-contained HTML page. It is NOT a normal part of the
   Streamlit app's UI -- Streamlit will load this whole file inside an
   <iframe> (a "page inside a page") using components.v1.html(). That's
   why this file has its own <html>, <head>, and <body> tags, its own
-  <style>, and loads its own copy of the Three.js library -- it can't
-  reach into app.py's Python or ui/styles.py's CSS, and doesn't need to.
+  <style>, and (as of this milestone) no <script src> at all -- Three.js
+  is now inlined by ui/scene_viewer.py from the vendored copy in
+  static/vendor/, the same way boot.html and command_center.html already
+  work. There must NEVER be a CDN link (e.g. cdnjs) in this project.
 
-  WHAT THREE.JS IS DOING HERE (plain-language walkthrough):
-  Three.js is a JavaScript library for drawing 3D graphics in a browser.
-  To show ANY 3D picture, three things are always required:
-    1. A SCENE  -- an empty 3D "stage" that objects and lights get added to.
-    2. A CAMERA -- a virtual eye that decides what part of the scene we see,
-                    from where, and at what angle.
-    3. A RENDERER -- the thing that actually draws (renders) the scene, as
-                      seen through the camera, onto the screen every frame.
-  This file sets up exactly those three things, adds one box shape and two
-  lights to the scene, points the camera at the box, and renders ONE frame.
-  Because Phase 7a is deliberately NOT animated yet, we render that single
-  frame and stop -- nothing moves, nothing loops. The box just sits there,
-  which nicely fits the "frozen/floating in a vacuum" theme anyway.
-
-  KNOWN FRAGILITY (read this if the box doesn't show up):
-    - This file loads the Three.js library from a CDN (a file hosted on
-      the internet, at cdnjs.cloudflare.com) via the <script src="..."> tag
-      below. If the computer running this has no internet access, or a
-      firewall/network blocks cdnjs.cloudflare.com, the library will fail
-      to load and the page will stay blank/dark with no box and no error
-      shown to the student. Opening the browser's dev tools console
-      (F12 -> Console tab) inside the iframe would show a "three is not
-      defined" or network error in that case.
-    - Streamlit's components.v1.html() draws this in a fixed-size box
-      (an iframe) whose HEIGHT is set from the Python side (in
-      ui/scene_viewer.py), not from this HTML file. If the box looks
-      cut off at the top or bottom, that height value is what to adjust,
-      not anything in here.
+  LIVE REACTIONS (this milestone):
+  ui/scene_viewer.py replaces the text __REACTION_VERDICT__ below with one
+  of: "resolved", "thin", "wrong", or "" (no submission yet / neutral).
+  Reading that baked-in value on load is enough -- Streamlit re-runs the
+  whole page (and this component re-renders fresh) on every Submit click,
+  so a new verdict always arrives as a fresh page load, no live messaging
+  between Python and the iframe is needed.
+    - "resolved": box calms -- fog thins, the accent point light brightens,
+      the idle drift/tumble slows down, and it settles there (stable).
+    - "thin" / "wrong": a brief shudder/flicker + fog thickening for about
+      1.5s, then eases back to the neutral baseline. Reads as an urgent
+      nudge, not a punishment -- no red "fail" screen, no shaming text.
+    - "" (neutral): just the original idle drift/tumble, unchanged.
 -->
 <!DOCTYPE html>
 <html>
@@ -59,18 +46,20 @@
   </style>
 </head>
 <body>
-  <!--
-    Three.js r128, loaded from cdnjs. Pinned to an exact version number
-    (not "latest") on purpose -- so this scene keeps working identically
-    even if a newer Three.js release later changes how things are set up.
-  -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    // Three.js (r128) and GSAP are inlined by ui/scene_viewer.py ahead of
+    // this <script> block, from the vendored copies in static/vendor/ --
+    // no CDN, matching boot.html / command_center.html.
+    const REACTION_VERDICT = "__REACTION_VERDICT__"; // resolved | thin | wrong | ""
     // ---- 1. SCENE ---------------------------------------------------
     // An empty 3D stage. We also give it a background color that matches
     // the dark "diagnostic terminal" theme used everywhere else in the app.
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05080a);
+    // Base/neutral fog density -- reactions below tween away from and
+    // back to this value. Same recipe (FogExp2) as boot.html / command_center.html.
+    const BASE_FOG_DENSITY = 0.035;
+    scene.fog = new THREE.FogExp2(0x05080a, BASE_FOG_DENSITY);
 
     // ---- 2. CAMERA ----------------------------------------------------
     // A "PerspectiveCamera" sees the world the way a human eye/real camera
@@ -93,6 +82,8 @@
     // <canvas> element that it creates and adds to the page for us.
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    if (THREE.ACESFilmicToneMapping) renderer.toneMapping = THREE.ACESFilmicToneMapping;
     document.body.appendChild(renderer.domElement);
 
     // ---- The box itself -------------------------------------------------
@@ -126,12 +117,51 @@
     keyLight.position.set(4, 5, 3);
     scene.add(keyLight);
 
-    // A dim, cool-toned fill light from the opposite side, so the shadowed
-    // face of the box isn't a flat silhouette -- a small detail, but it
-    // reads much better and still costs nothing since there's no animation.
-    const fillLight = new THREE.DirectionalLight(0x2dd6e0, 0.4);
-    fillLight.position.set(-4, -2, -3);
-    scene.add(fillLight);
+    // Accent point light (cyan, Chapter 1 color) from the opposite side, so
+    // the shadowed face of the box isn't a flat silhouette. This is also
+    // the light the reaction states below brighten/flicker to sell the
+    // "resolved" / "thin"/"wrong" moments.
+    const BASE_ACCENT_INTENSITY = 0.9;
+    const accentLight = new THREE.PointLight(0x2dd6e0, BASE_ACCENT_INTENSITY, 10);
+    accentLight.position.set(-3, -1, 2.5);
+    scene.add(accentLight);
+
+    // ---- Live Reactions ---------------------------------------------------
+    // reactionState.speed multiplies the idle rotation speed in the animate
+    // loop below (1 = normal, <1 = calmer, >1 = agitated). GSAP tweens it
+    // and the fog/light values smoothly instead of snapping instantly.
+    const reactionState = { speed: 1 };
+
+    function stabilize() {
+      // "resolved": fog thins slightly, accent light brightens, motion slows.
+      gsap.to(scene.fog, { density: BASE_FOG_DENSITY * 0.5, duration: 1.2, ease: "power2.out" });
+      gsap.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 1.6, duration: 1.2, ease: "power2.out" });
+      gsap.to(reactionState, { speed: 0.4, duration: 1.2, ease: "power2.out" });
+    }
+
+    function destabilize() {
+      // "thin"/"wrong": a brief shudder/flicker + thicker fog, then eases
+      // back to the neutral baseline after ~1.5s. An urgent nudge, not a
+      // punishment -- no red flash, no shaming visuals.
+      const shudder = gsap.timeline();
+      shudder.to(scene.fog, { density: BASE_FOG_DENSITY * 1.8, duration: 0.15 }, 0);
+      shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 0.3, duration: 0.1, repeat: 3, yoyo: true }, 0);
+      shudder.to(box.rotation, {
+        z: box.rotation.z + 0.18, duration: 0.08, repeat: 5, yoyo: true, ease: "power1.inOut",
+      }, 0);
+      shudder.to(reactionState, { speed: 1.8, duration: 0.15 }, 0);
+      // Settle back to the neutral baseline by ~1.5s total.
+      shudder.to(scene.fog, { density: BASE_FOG_DENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
+      shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
+      shudder.to(reactionState, { speed: 1, duration: 1.0, ease: "power2.out" }, 0.5);
+    }
+
+    if (REACTION_VERDICT === "resolved") {
+      stabilize();
+    } else if (REACTION_VERDICT === "thin" || REACTION_VERDICT === "wrong") {
+      destabilize();
+    }
+    // REACTION_VERDICT === "" (no submission yet): stays neutral, no call.
 
     // ---- Phase 7b: Animation loop -----------------------------------------
     // Browsers can't run our code and repaint the screen at the same time --
@@ -144,9 +174,10 @@
     function animate() {
       requestAnimationFrame(animate);
 
-      // Slow tumble: tiny angle added every frame, forever.
-      box.rotation.y += 0.0035;
-      box.rotation.x += 0.0015;
+      // Slow tumble: tiny angle added every frame, forever. Scaled by
+      // reactionState.speed so verdicts can calm or agitate the motion.
+      box.rotation.y += 0.0035 * reactionState.speed;
+      box.rotation.x += 0.0015 * reactionState.speed;
 
       // Gentle up/down drift using a sine wave, so it eases back and forth
       // rather than moving at a constant speed like a bouncing ball would.
@@ -168,48 +199,13 @@
   </script>
 
   <!--
-    Phase 7c — browser-side CDN failure check.
-
-    WHY THIS BLOCK EXISTS (separate from the Python fallback in
-    scene_viewer.py): Python only knows whether it could read THIS HTML
-    file off disk. It has no way to know whether the browser, once it
-    got this file, was actually able to reach cdnjs.cloudflare.com to
-    download Three.js. If that network request fails (no internet, a
-    firewall, cdnjs being down, etc.), every script above silently does
-    nothing -- `THREE` is never defined, so `new THREE.Scene()` etc.
-    never run, and the iframe just stays blank/dark forever with no
-    error visible to the student. That's the exact "blank box" failure
-    this phase exists to prevent.
-
-    THE FIX: wait a couple of seconds, then check whether the global
-    `THREE` variable exists. If it doesn't, the CDN never arrived --
-    so replace this entire page's content with a plain 2D HTML/CSS
-    fallback card (no Three.js needed at all for this part) styled to
-    match the app's dark/cyan "diagnostic terminal" look.
+    Note: the old browser-side "did the CDN fail" check (a setTimeout
+    that looked for `THREE === undefined`) is gone -- Three.js is now
+    inlined synchronously by ui/scene_viewer.py from static/vendor/, the
+    same as boot.html/command_center.html, so it's never fetched over the
+    network from inside this iframe and can't fail that way anymore. The
+    remaining fallback (file missing/unreadable/empty) is still handled
+    Python-side, in scene_viewer.py's try/except.
   -->
-  <script>
-    setTimeout(() => {
-      if (typeof THREE === "undefined") {
-        document.body.innerHTML = `
-          <div style="
-            display:flex; align-items:center; justify-content:center;
-            width:100%; height:100%; box-sizing:border-box; padding:24px;
-            background:#05080a; font-family:monospace;
-          ">
-            <div style="
-              border:1px solid #2dd6e0; border-radius:6px; padding:20px 24px;
-              max-width:420px; color:#e6f1f3; text-align:center;
-            ">
-              <div style="color:#2dd6e0; font-weight:bold; letter-spacing:1px; margin-bottom:10px;">
-                [ 3D VISUAL FEED OFFLINE ]
-              </div>
-              <div style="color:#8aa0aa; font-size:14px; line-height:1.5;">
-                A box floats motionless in a vacuum chamber, with nothing touching it.
-              </div>
-            </div>
-          </div>`;
-      }
-    }, 2500);
-  </script>
 </body>
 </html>
