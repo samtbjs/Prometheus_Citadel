@@ -11,9 +11,9 @@ from logic.streak_engine import (
     is_anomaly_cleared,
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
-from ai.tutor import judge_explanation
+from ai.tutor import judge_explanation, mock_in_character_response
 
-st.title("Prometheus Lab — Anomaly Room (Phase 4 Prototype)")
+st.title("Prometheus Lab — Anomaly Room (Phase 5 Prototype)")
 
 # ---------------------------------------------------------------------------
 # Load the list of Anomalies from data/anomalies.json every time the app
@@ -162,11 +162,21 @@ else:
         # THREE Anomalies -- even vacuum_box, which additionally has
         # its own separate real numeric force check above.
         # -------------------------------------------------------------
+        # ---------------------------------------------------------------
+        # PHASE 5: judge_explanation() now returns TWO things from its
+        # single API call: the verdict word (same as Phase 4) AND a
+        # short in-character line of dialogue from the "ship's
+        # diagnostic AI" persona. Whenever we're using the mock path
+        # (checkbox checked, or the real call fails below), there is no
+        # real dialogue to show, so we use the same hardcoded generic
+        # line from mock_in_character_response() in both of those cases.
+        # ---------------------------------------------------------------
         if use_mock:
             explanation_verdict = fake_verdict
+            tutor_response = mock_in_character_response()
         else:
             try:
-                explanation_verdict = judge_explanation(
+                explanation_verdict, tutor_response = judge_explanation(
                     question_prompt=q["prompt"],
                     expected_concept=q["answer"],
                     student_explanation=explanation,
@@ -176,7 +186,8 @@ else:
                 # key, rate limits, or any other unexpected API problem.
                 # We never let this crash the app -- we tell the student
                 # plainly what happened and fall back to the mock
-                # dropdown's value for this one submission only.
+                # dropdown's value (and the mock dialogue line) for
+                # this one submission only.
                 new_messages.append({
                     "id": str(uuid.uuid4()),
                     "kind": "error",
@@ -186,6 +197,7 @@ else:
                     ),
                 })
                 explanation_verdict = fake_verdict
+                tutor_response = mock_in_character_response()
 
         if is_vacuum_box:
             # The real numeric calculation always has the final say: if
@@ -197,13 +209,24 @@ else:
         else:
             verdict = explanation_verdict
 
-        # A small bonus: spell out the verdict itself so it's always
-        # clear what just happened, not just inferred from the streak.
+        # -------------------------------------------------------------
+        # PHASE 5: this used to be a plain "AI verdict on your
+        # explanation: X" line. We now fold the verdict word AND the
+        # in-character tutor dialogue into ONE combined message instead
+        # of showing them as two separate messages. Reasoning: the
+        # dialogue line only makes sense paired with the verdict that
+        # produced it ("resolved" -> affirming line, "thin"/"wrong" ->
+        # guiding question), so keeping them together as one message
+        # reads as a single coherent moment from the tutor rather than
+        # cluttering the screen with two messages every submission. The
+        # bold verdict word is kept at the front so it's still instantly
+        # scannable, exactly like before.
+        # -------------------------------------------------------------
         verdict_kind = {"resolved": "success", "thin": "warning", "wrong": "error"}[verdict]
         new_messages.append({
             "id": str(uuid.uuid4()),
             "kind": verdict_kind,
-            "text": f"AI verdict on your explanation: **{verdict}**",
+            "text": f"**{verdict.upper()}** — {tutor_response}",
         })
 
         st.session_state.feedback_messages = new_messages
