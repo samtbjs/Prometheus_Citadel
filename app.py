@@ -62,8 +62,11 @@ else:
     q = questions[st.session_state.question_index]
     st.subheader(q["prompt"])
 
-    student_answer = st.text_input("Your answer:")
-    explanation = st.text_area("Explain your reasoning in one sentence:")
+    answer_key = f"answer_{selected_id}_{st.session_state.question_index}"
+    explanation_key = f"explanation_{selected_id}_{st.session_state.question_index}"
+
+    student_answer = st.text_input("Your answer:", key=answer_key)
+    explanation = st.text_area("Explain your reasoning in one sentence:", key=explanation_key)
 
     # Phase 1/2: fake the AI verdict with a dropdown instead of a real API call
     fake_verdict = st.selectbox(
