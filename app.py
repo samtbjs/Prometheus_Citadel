@@ -12,9 +12,6 @@ from logic.streak_engine import (
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
-from ui.styles import inject_custom_css
-
-inject_custom_css()
 
 st.title("Prometheus Lab — Anomaly Room (Phase 5 Prototype)")
 
@@ -66,6 +63,16 @@ anomaly = anomalies[selected_id]
 questions = anomaly["questions"]
 
 st.caption(anomaly["description"])
+
+# -----------------------------------------------------------------------
+# PHASE 7a: a single, STATIC (not yet animated) Three.js 3D scene, shown
+# only for the "vacuum_box" Anomaly, above the question/readout card
+# below. sinking_stone and hot_cold_chairs are untouched and show no
+# scene at all. Animation (7b) and fallback/error-handling (7c) are
+# deliberately NOT part of this step -- see ui/scene_viewer.py.
+# -----------------------------------------------------------------------
+if selected_id == "vacuum_box":
+    render_anomaly_scene()
 
 # -----------------------------------------------------------------------
 # Redraw any messages saved from the last Submit click, each with its own

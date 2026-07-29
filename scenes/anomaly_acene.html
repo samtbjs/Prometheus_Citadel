@@ -1,0 +1,155 @@
+<!--
+  Phase 7a — Prometheus Lab 3D Scene (vacuum_box Anomaly only)
+
+  WHAT THIS FILE IS:
+  A completely self-contained HTML page. It is NOT a normal part of the
+  Streamlit app's UI -- Streamlit will load this whole file inside an
+  <iframe> (a "page inside a page") using components.v1.html(). That's
+  why this file has its own <html>, <head>, and <body> tags, its own
+  <style>, and loads its own copy of the Three.js library -- it can't
+  reach into app.py's Python or ui/styles.py's CSS, and doesn't need to.
+
+  WHAT THREE.JS IS DOING HERE (plain-language walkthrough):
+  Three.js is a JavaScript library for drawing 3D graphics in a browser.
+  To show ANY 3D picture, three things are always required:
+    1. A SCENE  -- an empty 3D "stage" that objects and lights get added to.
+    2. A CAMERA -- a virtual eye that decides what part of the scene we see,
+                    from where, and at what angle.
+    3. A RENDERER -- the thing that actually draws (renders) the scene, as
+                      seen through the camera, onto the screen every frame.
+  This file sets up exactly those three things, adds one box shape and two
+  lights to the scene, points the camera at the box, and renders ONE frame.
+  Because Phase 7a is deliberately NOT animated yet, we render that single
+  frame and stop -- nothing moves, nothing loops. The box just sits there,
+  which nicely fits the "frozen/floating in a vacuum" theme anyway.
+
+  KNOWN FRAGILITY (read this if the box doesn't show up):
+    - This file loads the Three.js library from a CDN (a file hosted on
+      the internet, at cdnjs.cloudflare.com) via the <script src="..."> tag
+      below. If the computer running this has no internet access, or a
+      firewall/network blocks cdnjs.cloudflare.com, the library will fail
+      to load and the page will stay blank/dark with no box and no error
+      shown to the student. Opening the browser's dev tools console
+      (F12 -> Console tab) inside the iframe would show a "three is not
+      defined" or network error in that case.
+    - Streamlit's components.v1.html() draws this in a fixed-size box
+      (an iframe) whose HEIGHT is set from the Python side (in
+      ui/scene_viewer.py), not from this HTML file. If the box looks
+      cut off at the top or bottom, that height value is what to adjust,
+      not anything in here.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    /* Fill the entire iframe with a dark, space-like background so
+       there's no white flash/border around the 3D canvas. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05080a;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    Three.js r128, loaded from cdnjs. Pinned to an exact version number
+    (not "latest") on purpose -- so this scene keeps working identically
+    even if a newer Three.js release later changes how things are set up.
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js"></script>
+  <script>
+    // ---- 1. SCENE ---------------------------------------------------
+    // An empty 3D stage. We also give it a background color that matches
+    // the dark "diagnostic terminal" theme used everywhere else in the app.
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05080a);
+
+    // ---- 2. CAMERA ----------------------------------------------------
+    // A "PerspectiveCamera" sees the world the way a human eye/real camera
+    // does (things farther away look smaller). The three numbers are:
+    // field of view in degrees, aspect ratio (width/height of the view),
+    // and the near/far clipping distances (how close/far it can "see").
+    const camera = new THREE.PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    // Move the camera back and up a bit, then angle it down at the box,
+    // so we get a clear three-quarter view instead of staring flat-on.
+    camera.position.set(3, 2, 5);
+    camera.lookAt(0, 0, 0);
+
+    // ---- 3. RENDERER ----------------------------------------------------
+    // This is what actually draws the scene, through the camera, onto a
+    // <canvas> element that it creates and adds to the page for us.
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // ---- The box itself -------------------------------------------------
+    // A BoxGeometry is the box's literal shape (1x1x1 units). A
+    // MeshStandardMaterial is the "skin" -- how it reacts to light,
+    // which is why we picked a material that actually needs lighting
+    // (a flat/unlit material would look the same everywhere and give no
+    // sense of shape). Cyan tone to match the app's accent color.
+    const geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x2dd6e0,
+      metalness: 0.3,
+      roughness: 0.4,
+    });
+    const box = new THREE.Mesh(geometry, material);
+    scene.add(box);
+
+    // ---- Lighting -------------------------------------------------------
+    // Without any light, a MeshStandardMaterial renders pure black --
+    // this is the single most common "why is my Three.js scene empty"
+    // mistake, so this scene deliberately uses two lights:
+    //   1. An ambient light -- soft light with no direction, coming from
+    //      "everywhere" evenly, so no side of the box is ever pitch black.
+    //   2. A directional light -- like sunlight, coming from one angle,
+    //      which is what actually makes the box look like a 3D shape by
+    //      putting a bright side and a shadowed side on it.
+    const ambientLight = new THREE.AmbientLight(0x445566, 1.2);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    keyLight.position.set(4, 5, 3);
+    scene.add(keyLight);
+
+    // A dim, cool-toned fill light from the opposite side, so the shadowed
+    // face of the box isn't a flat silhouette -- a small detail, but it
+    // reads much better and still costs nothing since there's no animation.
+    const fillLight = new THREE.DirectionalLight(0x2dd6e0, 0.4);
+    fillLight.position.set(-4, -2, -3);
+    scene.add(fillLight);
+
+    // ---- Render ONE frame -------------------------------------------------
+    // Phase 7a is intentionally static (no animation loop yet -- that's
+    // Phase 7b). Calling render() one single time is enough to draw the
+    // box, lit, at its current fixed position, and leave it on screen.
+    renderer.render(scene, camera);
+
+    // ---- Keep it looking right if the iframe itself gets resized -------
+    // This does NOT animate the box -- it only redraws the same static
+    // frame if the browser window changes size, so the box doesn't look
+    // stretched or off-center. This is a one-line safety net, not
+    // animation logic.
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
