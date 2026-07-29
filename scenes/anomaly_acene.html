@@ -166,5 +166,50 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>
+
+  <!--
+    Phase 7c — browser-side CDN failure check.
+
+    WHY THIS BLOCK EXISTS (separate from the Python fallback in
+    scene_viewer.py): Python only knows whether it could read THIS HTML
+    file off disk. It has no way to know whether the browser, once it
+    got this file, was actually able to reach cdnjs.cloudflare.com to
+    download Three.js. If that network request fails (no internet, a
+    firewall, cdnjs being down, etc.), every script above silently does
+    nothing -- `THREE` is never defined, so `new THREE.Scene()` etc.
+    never run, and the iframe just stays blank/dark forever with no
+    error visible to the student. That's the exact "blank box" failure
+    this phase exists to prevent.
+
+    THE FIX: wait a couple of seconds, then check whether the global
+    `THREE` variable exists. If it doesn't, the CDN never arrived --
+    so replace this entire page's content with a plain 2D HTML/CSS
+    fallback card (no Three.js needed at all for this part) styled to
+    match the app's dark/cyan "diagnostic terminal" look.
+  -->
+  <script>
+    setTimeout(() => {
+      if (typeof THREE === "undefined") {
+        document.body.innerHTML = `
+          <div style="
+            display:flex; align-items:center; justify-content:center;
+            width:100%; height:100%; box-sizing:border-box; padding:24px;
+            background:#05080a; font-family:monospace;
+          ">
+            <div style="
+              border:1px solid #2dd6e0; border-radius:6px; padding:20px 24px;
+              max-width:420px; color:#e6f1f3; text-align:center;
+            ">
+              <div style="color:#2dd6e0; font-weight:bold; letter-spacing:1px; margin-bottom:10px;">
+                [ 3D VISUAL FEED OFFLINE ]
+              </div>
+              <div style="color:#8aa0aa; font-size:14px; line-height:1.5;">
+                A box floats motionless in a vacuum chamber, with nothing touching it.
+              </div>
+            </div>
+          </div>`;
+      }
+    }, 2500);
+  </script>
 </body>
 </html>
