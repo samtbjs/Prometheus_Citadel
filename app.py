@@ -44,24 +44,55 @@ if "progress" not in st.session_state:
 if "feedback_messages" not in st.session_state:
     st.session_state.feedback_messages = []
 
-# A dropdown so the student can choose which Anomaly to work on.
-selected_id = st.selectbox(
-    "Choose an Anomaly:",
-    anomaly_ids,
-    format_func=lambda aid: anomalies[aid]["name"],
-)
+# -----------------------------------------------------------------------
+# PHASE 8: which screen is showing right now. "menu" = new Home Menu.
+# "anomaly_room" = the existing question/streak/3D-scene screen. Defaults
+# to "menu" on first load, and ALSO on every real browser refresh, since
+# session_state is wiped on a true reload (only progress.json on disk
+# survives a reload, which is exactly what we want).
+# -----------------------------------------------------------------------
+if "view" not in st.session_state:
+    st.session_state.view = "menu"
 
-# If this is the first time we've seen this Anomaly selected in this
-# session (either the app just started, or the student just switched to a
-# different Anomaly in the dropdown), pull that Anomaly's saved progress
-# back into session_state so the streak/question picks up where it left off.
-if st.session_state.get("current_anomaly") != selected_id:
-    st.session_state.current_anomaly = selected_id
-    saved = get_anomaly_progress(st.session_state.progress, selected_id)
+
+def _enter_anomaly(anomaly_id):
+    """Switch to an Anomaly's room and load ITS saved progress into
+    session_state, so it resumes exactly where it left off."""
+    st.session_state.current_anomaly = anomaly_id
+    saved = get_anomaly_progress(st.session_state.progress, anomaly_id)
     st.session_state.question_index = saved["question_index"]
     st.session_state.streak = saved["streak"]
     st.session_state.cleared = saved["cleared"]
-    st.session_state.feedback_messages = []  # old anomaly's messages don't carry over
+    st.session_state.feedback_messages = []
+    st.session_state.view = "anomaly_room"
+
+
+# -----------------------------------------------------------------------
+# PHASE 8: HOME MENU screen. Replaces the old st.selectbox dropdown. Lists
+# all 3 Anomalies with a cleared/uncleared badge (read from
+# st.session_state.progress, always current since we save to disk after
+# every Submit) and a button to enter each one.
+# -----------------------------------------------------------------------
+if st.session_state.view == "menu":
+    st.subheader("Select an Anomaly")
+    for aid in anomaly_ids:
+        info = anomalies[aid]
+        saved = get_anomaly_progress(st.session_state.progress, aid)
+        status = "✅ Cleared" if saved["cleared"] else "🔒 In Progress"
+        with st.container(border=True):
+            st.markdown(f"**{info['name']}** — {status}")
+            st.caption(info["description"])
+            if st.button("Enter", key=f"enter_{aid}"):
+                _enter_anomaly(aid)
+                st.rerun()
+    st.stop()
+
+# From here down we are inside "anomaly_room" for st.session_state.current_anomaly.
+selected_id = st.session_state.current_anomaly
+
+if st.button("← Back to Menu"):
+    st.session_state.view = "menu"
+    st.rerun()
 
 anomaly = anomalies[selected_id]
 questions = anomaly["questions"]

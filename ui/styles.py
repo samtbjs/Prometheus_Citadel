@@ -186,6 +186,18 @@ h3::before {
     transform: scale(0.98);
 }
 
+/* ---- Phase 8: Home Menu Anomaly cards ---------------------------------
+   Reuses the same panel-bg/panel-border/accent look as the question
+   "terminal readout" card above, just applied to st.container(border=True)
+   instead of an h3. */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border) !important;
+    border-left: 4px solid var(--accent) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 0 22px rgba(45, 214, 224, 0.08) inset;
+}
+
 /* ---- Minor cohesion touches on other inputs --------------------------- */
 [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
 .stTextInput > div > div,
