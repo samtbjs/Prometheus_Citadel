@@ -17,7 +17,7 @@ from ui.scene_viewer import render_anomaly_scene
 
 inject_custom_css()
 
-st.title("Prometheus Lab — Anomaly Room (Phase 5 Prototype)")
+st.title("Prometheus Lab")
 
 # ---------------------------------------------------------------------------
 # Load the list of Anomalies from data/anomalies.json every time the app

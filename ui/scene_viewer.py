@@ -21,9 +21,13 @@ Together, these two checks cover "the file itself is the problem" and
 "the file is fine but the network inside the browser is the problem."
 """
 
+import os
+
 import streamlit.components.v1 as components
 
-SCENE_FILE_PATH = "scenes/anomaly_acene.html"
+_THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
+_PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
+SCENE_FILE_PATH = os.path.join(_PROJECT_ROOT, "scenes", "anomaly_acene.html")
 SCENE_HEIGHT_PX = 420
 
 # ---------------------------------------------------------------------
