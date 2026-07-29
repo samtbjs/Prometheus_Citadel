@@ -8,8 +8,9 @@ from logic.streak_engine import (
     update_streak,
     is_anomaly_cleared,
 )
+from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 
-st.title("Prometheus Lab — Anomaly Room (Phase 2 Prototype)")
+st.title("Prometheus Lab — Anomaly Room (Phase 3 Prototype)")
 
 # ---------------------------------------------------------------------------
 # Load the list of Anomalies from data/anomalies.json every time the app
@@ -62,10 +63,32 @@ else:
     q = questions[st.session_state.question_index]
     st.subheader(q["prompt"])
 
-    answer_key = f"answer_{selected_id}_{st.session_state.question_index}"
     explanation_key = f"explanation_{selected_id}_{st.session_state.question_index}"
 
-    student_answer = st.text_input("Your answer:", key=answer_key)
+    # -----------------------------------------------------------------
+    # PHASE 3: "vacuum_box" now gets a REAL calculation instead of the
+    # old keyword-matching text box. The student types a NUMBER (their
+    # guess for the net force on the box, in Newtons), and we check that
+    # number with actual arithmetic in logic/physics_calc.py.
+    #
+    # The other two Anomalies (sinking_stone, hot_cold_chairs) are
+    # untouched — they still show a plain text box like before.
+    # -----------------------------------------------------------------
+    is_vacuum_box = selected_id == "vacuum_box"
+
+    if is_vacuum_box:
+        force_key = f"force_{selected_id}_{st.session_state.question_index}"
+        student_force = st.number_input(
+            "Enter the net force acting on the box, in Newtons (N):",
+            value=0.0,
+            step=0.1,
+            format="%.2f",
+            key=force_key,
+        )
+    else:
+        answer_key = f"answer_{selected_id}_{st.session_state.question_index}"
+        student_answer = st.text_input("Your answer:", key=answer_key)
+
     explanation = st.text_area("Explain your reasoning in one sentence:", key=explanation_key)
 
     # Phase 1/2: fake the AI verdict with a dropdown instead of a real API call
@@ -75,7 +98,25 @@ else:
     )
 
     if st.button("Submit"):
-        st.session_state.streak = update_streak(st.session_state.streak, fake_verdict)
+        if is_vacuum_box:
+            # Grade the NUMBER with real physics, not string matching.
+            force_is_correct = check_vacuum_box_force(student_force)
+            if force_is_correct:
+                st.info(vacuum_box_feedback(student_force))
+            else:
+                st.warning(vacuum_box_feedback(student_force))
+
+            # The real calculation always has the final say on the
+            # numeric part: if the force value is wrong, the verdict is
+            # "wrong" no matter what the mock-AI dropdown says. If the
+            # force value is right, we still fall back to the mock-AI
+            # dropdown to judge the quality of the written explanation
+            # (that's the part real AI will grade in a later phase).
+            verdict = fake_verdict if force_is_correct else "wrong"
+        else:
+            verdict = fake_verdict
+
+        st.session_state.streak = update_streak(st.session_state.streak, verdict)
         st.session_state.question_index = (st.session_state.question_index + 1) % len(questions)
 
         if is_anomaly_cleared(st.session_state.streak):
