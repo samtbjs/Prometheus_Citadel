@@ -1,3 +1,4 @@
+import time
 import uuid
 
 import streamlit as st
@@ -23,6 +24,7 @@ from ui.scene_viewer import (
     render_boot_scene,
     render_command_center_scene,
     render_debrief_scene,
+    render_transition_scene,
 )
 from ui.mentor import MENTOR_NAME, debrief_line_for
 import ui.design_tokens as tokens
@@ -47,6 +49,63 @@ chapters = load_chapters()
 # scenes in Milestone 3 -- the Command Center needs it to know lock state.)
 if "progress" not in st.session_state:
     st.session_state.progress = load_progress()
+
+# ---------------------------------------------------------------------
+# MILESTONE 5, Part C: Travel Transition. Buttons that change screens no
+# longer set view/intro_stage + st.rerun() directly -- they call
+# _begin_transition() below, which stashes the real destination in
+# "pending_view"/"pending_intro_stage" and reruns with "transitioning"
+# on. THIS block, which runs before any normal screen on every rerun, is
+# the only place that ever reads those pending values: it shows the
+# corridor once, sleeps briefly, then lands on the real destination and
+# reruns again. try/except/finally guarantees we always land -- if the
+# corridor render or the sleep ever raises, or if TRANSITION_STUCK_AFTER
+# seconds somehow pass without landing, we skip straight to the
+# destination instead of ever looping or freezing on this screen.
+# ---------------------------------------------------------------------
+TRANSITION_SECONDS = 0.7
+TRANSITION_STUCK_AFTER = 3.0
+
+for _key, _default in (
+    ("transitioning", False),
+    ("pending_view", None),
+    ("pending_intro_stage", None),
+    ("transition_accent", None),
+    ("transition_started", 0.0),
+):
+    if _key not in st.session_state:
+        st.session_state[_key] = _default
+
+
+def _begin_transition(view=None, intro_stage=None, accent_hex=None):
+    """Call this instead of setting view/intro_stage + st.rerun() directly
+    whenever a button changes screens, so the corridor plays first."""
+    st.session_state.pending_view = view
+    st.session_state.pending_intro_stage = intro_stage
+    st.session_state.transition_accent = accent_hex
+    st.session_state.transitioning = True
+    st.session_state.transition_started = time.time()
+    st.rerun()
+
+
+if st.session_state.transitioning:
+    stuck = (time.time() - st.session_state.transition_started) > TRANSITION_STUCK_AFTER
+    try:
+        if not stuck:
+            render_transition_scene(accent_hex=st.session_state.transition_accent)
+            time.sleep(TRANSITION_SECONDS)
+    except Exception:
+        pass  # never let a render/timing hiccup block landing, below
+    finally:
+        if st.session_state.pending_view is not None:
+            st.session_state.view = st.session_state.pending_view
+        if st.session_state.pending_intro_stage is not None:
+            st.session_state.intro_stage = st.session_state.pending_intro_stage
+        st.session_state.transitioning = False
+        st.session_state.pending_view = None
+        st.session_state.pending_intro_stage = None
+        st.rerun()
+    st.stop()
 
 # ---------------------------------------------------------------------
 # MILESTONE 1 — new opening scene, gating entry into the existing app.
@@ -93,9 +152,11 @@ if st.session_state.intro_stage == "command_center":
             if unlocked:
                 if st.button(f"▶ {chapter['name']}", key=f"enter_chapter_{cid}"):
                     st.session_state.current_chapter = cid
-                    st.session_state.intro_stage = "done"
-                    st.session_state.view = "menu"
-                    st.rerun()
+                    _begin_transition(
+                        view="menu",
+                        intro_stage="done",
+                        accent_hex=getattr(tokens, chapter["accent_token"]),
+                    )
             else:
                 st.button(f"🔒 {chapter['name']}", key=f"locked_chapter_{cid}", disabled=True)
 
@@ -143,8 +204,11 @@ if st.session_state.intro_stage == "command_center":
             st.session_state.debrief_anomaly_id = debrief_choice
             st.session_state.debrief_newly_unlocked = newly_unlocked
             st.session_state.intro_stage = "done"
-            st.session_state.view = "debrief"
-            st.rerun()
+            debrief_accent = (
+                getattr(tokens, chapters[owning_chapter]["accent_token"])
+                if owning_chapter else tokens.MENTOR_ACCENT
+            )
+            _begin_transition(view="debrief", accent_hex=debrief_accent)
     st.stop()
 
 st.title("Prometheus Lab")
@@ -190,7 +254,6 @@ def _enter_anomaly(anomaly_id):
     st.session_state.cleared = saved["cleared"]
     st.session_state.feedback_messages = []
     st.session_state.last_verdict = None
-    st.session_state.view = "anomaly_room"
 
 
 # -----------------------------------------------------------------------
@@ -213,8 +276,7 @@ if st.session_state.view == "menu":
         st.subheader("Select an Anomaly")
 
     if st.button("← Back to Command Center"):
-        st.session_state.intro_stage = "command_center"
-        st.rerun()
+        _begin_transition(intro_stage="command_center", accent_hex=tokens.CHAPTER_1_ACCENT)
 
     for aid in chapter_anomaly_ids:
         info = anomalies[aid]
@@ -225,7 +287,11 @@ if st.session_state.view == "menu":
             st.caption(info["description"])
             if st.button("Enter", key=f"enter_{aid}"):
                 _enter_anomaly(aid)
-                st.rerun()
+                enter_accent = (
+                    getattr(tokens, chapters[current_chapter_id]["accent_token"])
+                    if current_chapter_id in chapters else tokens.CHAPTER_1_ACCENT
+                )
+                _begin_transition(view="anomaly_room", accent_hex=enter_accent)
     st.stop()
 
 # -----------------------------------------------------------------------
@@ -244,16 +310,14 @@ if st.session_state.view == "debrief":
         newly_unlocked_names=st.session_state.get("debrief_newly_unlocked", []),
     )
     if st.button("Continue", type="primary"):
-        st.session_state.view = "menu"
-        st.rerun()
+        _begin_transition(view="menu", accent_hex=tokens.CHAPTER_1_ACCENT)
     st.stop()
 
 # From here down we are inside "anomaly_room" for st.session_state.current_anomaly.
 selected_id = st.session_state.current_anomaly
 
 if st.button("← Back to Menu"):
-    st.session_state.view = "menu"
-    st.rerun()
+    _begin_transition(view="menu", accent_hex=tokens.CHAPTER_1_ACCENT)
 
 anomaly = anomalies[selected_id]
 questions = anomaly["questions"]

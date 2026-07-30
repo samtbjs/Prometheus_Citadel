@@ -18,6 +18,7 @@ import streamlit.components.v1 as components
 import ui.design_tokens as tokens
 from ui.focal_objects import FOCAL_OBJECT_CONFIG
 from ui.mentor_visual import MENTOR_CORE_CONFIG
+from ui.transitions import build_streaks_html
 
 _THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
 _PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
@@ -118,6 +119,32 @@ def _render_vendored_scene(scene_filename, label, height=420):
         return
 
     full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=height)
+
+
+def render_transition_scene(accent_hex=None, height=180):
+    """Stage: transition (Milestone 5, Part C) -- the brief corridor sweep
+    played between every real view change. accent_hex tints the streaks;
+    falls back to CHAPTER_1_ACCENT (neutral cyan) if none given, e.g. when
+    heading back to the Command Center.
+
+    Only reads gsap.min.js (no THREE.js needed for a flat corridor). If
+    gsap or the scene file can't be read, renders a plain blank dark div
+    for the same duration instead of raising -- app.py's transition
+    handler also wraps this call in its own try/except as a second layer,
+    so a broken asset here can never freeze the app on the transition
+    screen."""
+    accent_hex = accent_hex or tokens.CHAPTER_1_ACCENT
+    try:
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        scene_html = _read_file(os.path.join(_SCENES_DIR, "transition.html"))
+        if not (gsap_js.strip() and scene_html.strip()):
+            raise ValueError("Transition scene assets are empty.")
+    except (OSError, ValueError):
+        components.html(f"<div style='width:100%;height:100%;background:{tokens.BG_VOID};'></div>", height=height)
+        return
+    scene_html = scene_html.replace("__STREAKS_HTML__", build_streaks_html(accent_hex))
+    full_html = f"<script>{gsap_js}</script>" + scene_html
     components.html(full_html, height=height)
 
 
