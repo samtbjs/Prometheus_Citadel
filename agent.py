@@ -7,7 +7,7 @@ matters most, and drives toward a goal (student demonstrates understanding).
 
 v1 implements the parts that don't need the model yet (analyze + prioritise +
 escalation decision). The teach -> follow-up -> evaluate -> adapt loop is scaffolded
-here and gets fleshed out once real Prometheus Lab AI is connected (see the Blueprint doc).
+here and gets fleshed out once real Prometheus Citadel AI is connected (see the Blueprint doc).
 """
 from __future__ import annotations   # 'dict | None' hints on Python 3.9
 import json

@@ -4,7 +4,7 @@ tutor.py  —  turns ONE wrong answer into a study-guide card.
 Splits cleanly into two kinds of content:
   * FACTS we already have (no AI needed): the snare name, the correct
     answer, and the worked solution from our verified bank.
-  * GENERATED content (Prometheus Lab's job): a friendly personalized explanation and a
+  * GENERATED content (Prometheus Citadel's job): a friendly personalized explanation and a
     fresh follow-up practice question. These go through ask_gemma().
 
 The `strategy` argument is how the AGENT adapts: if a plain explanation doesn't

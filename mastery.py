@@ -4,7 +4,7 @@ mastery.py  —  the autonomous mastery loop.
 After the quiz diagnoses a snare, this module keeps the agent working the
 problem until the student demonstrates understanding or a safety cap trips:
 
-    TEACH (Prometheus Lab, strategy-specific lesson)
+    TEACH (Prometheus Citadel, strategy-specific lesson)
       -> CHECK (a fresh question on the same snare)
       -> EVALUATE (deterministic when the check question comes from the bank)
       -> ADAPT (plain code: mastery, next strategy, or parent hand-off)

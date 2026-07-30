@@ -1,9 +1,9 @@
 """
-rewards.py  —  AI-powered creative features for PROMETHEUS LAB.
+rewards.py  —  AI-powered creative features for PROMETHEUS CITADEL.
 
 Two small pieces of on-device flavor that make the game layer feel alive:
 
-  * forge_relic()        — after a monster's snare is mastered, Prometheus Lab forges a
+  * forge_relic()        — after a monster's snare is mastered, Prometheus Citadel forges a
                            unique collectible relic tied to the exact skill won.
   * battle_memory_line() — at an encounter, the monster speaks ONE line that
                            references the player's real history (past wins,

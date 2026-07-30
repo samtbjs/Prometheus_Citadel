@@ -1,5 +1,5 @@
 """
-app.py  —  Prometheus Lab (student-facing quiz + AI study guide).
+app.py  —  Prometheus Citadel (student-facing quiz + AI study guide).
 
 Run it:   streamlit run app.py
 
@@ -26,7 +26,7 @@ from gemma_client import plainify
 QUESTIONS = json.loads((Path(__file__).parent / "data" / "questions.json").read_text())
 STRANDS = sorted({q["strand"] for q in QUESTIONS})
 
-# PROMETHEUS LAB is the front door; the classic dashboard is one click away.
+# PROMETHEUS CITADEL is the front door; the classic dashboard is one click away.
 # A first-time challenger meets the introduction before the citadel - it is
 # skippable, and never shown twice in a sitting.
 if "stage" not in st.session_state:
@@ -34,7 +34,7 @@ if "stage" not in st.session_state:
     st.session_state.stage = "onboard"
 
 st.set_page_config(
-    page_title="PROMETHEUS LAB",
+    page_title="PROMETHEUS CITADEL",
     layout="centered")
 
 _GAME_SKIN = """
@@ -253,7 +253,7 @@ stroke="%23d9c8bb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="ro
 </style>
 """
 
-# ---- one identity everywhere: the PROMETHEUS LAB skin (looks only, no logic) ----
+# ---- one identity everywhere: the PROMETHEUS CITADEL skin (looks only, no logic) ----
 st.markdown(_GAME_SKIN, unsafe_allow_html=True)
 
 
@@ -457,7 +457,7 @@ def start_mastery(result, analysis):
 # ---------------- INTRO ----------------
 def intro():
     st.markdown('<div class="gwb-kicker">Grade 9 EQAO Mathematics · Simple mode</div>', unsafe_allow_html=True)
-    st.title("PROMETHEUS LAB")
+    st.title("PROMETHEUS CITADEL")
     st.caption("Simple mode — same brain, no monsters underfoot. Runs privately on device.")
     st.write(
         "Take a short quiz. When you submit, the agent identifies why you missed "
@@ -476,7 +476,7 @@ def intro():
 
     st.divider()
     st.caption("Rather play than scroll?")
-    if st.button("Back to PROMETHEUS Lab", type="primary"):
+    if st.button("Back to PROMETHEUS Citadel", type="primary"):
         st.session_state.adventure = True
         st.session_state.stage = "map" if st.session_state.get("onboarded") else "onboard"
         st.rerun()
@@ -485,7 +485,7 @@ def intro():
                   help="Every note the agent has written for your parents this session")
 
 
-# ---------------- PROMETHEUS LAB (optional, additive game layer) ----------------
+# ---------------- PROMETHEUS CITADEL (optional, additive game layer) ----------------
 # Every unit is guarded by a monster — a personified snare. The hub
 # is a 3D nexus (three.js, bloom). Clicking a monster shows its game card; Begin
 # enters that unit's real quiz via ?station=. Deliberately NOT the app's clean
@@ -644,7 +644,7 @@ _HUB_TEMPLATE = r"""
 <div id="ui">
   <header>
     <div id="banner">
-      <h1>PROMETHEUS LAB</h1>
+      <h1>PROMETHEUS CITADEL</h1>
       <p>Every monster is here to make you forget your math. Defeat them by proving you remember.</p>
     </div>
     <div class="hbtns">
@@ -1709,7 +1709,7 @@ def _topic_for_snare(snare_id: str) -> str:
 
 
 def parents_stage():
-    st.markdown('<div class="gwb-kicker">PROMETHEUS LAB · letters home</div>',
+    st.markdown('<div class="gwb-kicker">PROMETHEUS CITADEL · letters home</div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<style>.gwb-parents-h{display:flex;align-items:center;gap:6px;margin:0 0 .4rem}'
@@ -1795,7 +1795,7 @@ def parents_stage():
             st.divider()
             st.subheader("Practice you can print")
             st.caption("Ten questions on one snare, with the working space and an "
-                       "answer key. Verified bank questions come first; Prometheus Lab writes "
+                       "answer key. Verified bank questions come first; Prometheus Citadel writes "
                        "any extra ones and must solve each of them again, blind, "
                        "before it goes on the paper.")
             for tid, tname, tstrand in snares:
@@ -1821,7 +1821,7 @@ def parents_stage():
                         mime="text/html", key=f"dl_{tid}", use_container_width=True)
                     cols[0].caption(f"{c['bank']} from the verified bank"
                                     + (f", {c['generated']} written and self-checked "
-                                       "by Prometheus Lab" if c["generated"] else ""))
+                                       "by Prometheus Citadel" if c["generated"] else ""))
     st.divider()
     back = st.session_state.get("parents_return", "map")
     st.button("Back to the game", key="parents_back", type="primary",
@@ -1914,7 +1914,7 @@ html,body{margin:0;background:#0b0710;overflow:hidden;font-family:'Trebuchet MS'
 </style>
 <div id="v"></div>
 <div id="hud">
-  <div id="title">WHILE PROMETHEUS LAB FORGES YOUR GUIDE... CLICK THE MONSTER</div>
+  <div id="title">WHILE PROMETHEUS CITADEL FORGES YOUR GUIDE... CLICK THE MONSTER</div>
   <div id="hp"><div class="lbl">__NAME__ HP</div><div class="bar"><div class="fill" id="fill"></div></div></div>
   <div id="bub"><strong>__NAME__:</strong> <span id="line"></span></div>
   <div id="win">DOWN - NOW FINISH IT WITH THE MATH BELOW</div>
@@ -1990,7 +1990,7 @@ def _fight_html(mon, score, total):
         f"{score} out of {total}? I barely felt that.",
         "Keep clicking, hero - the real fight is the math below.",
         "I have devoured sharper answers for breakfast.",
-        f"Prometheus Lab is writing your rescue plan. You will need it after {score}/{total}.",
+        f"Prometheus Citadel is writing your rescue plan. You will need it after {score}/{total}.",
         "Hit me all you want - only understanding defeats me.",
     ]
     return (_FIGHT_TEMPLATE
@@ -2778,7 +2778,7 @@ html,body{margin:0;background:#050308;overflow:hidden;font-family:'Trebuchet MS'
   <div id="endcard">
     <div id="endtitle"></div>
     <div id="endsub"></div>
-    <a id="coachlink" target="_blank" rel="opener">GET COACHED BY PROMETHEUS LAB</a>
+    <a id="coachlink" target="_blank" rel="opener">GET COACHED BY PROMETHEUS CITADEL</a>
   </div>
 </div>
 <script>
@@ -3176,7 +3176,7 @@ def skirmish_stage():
                 'overflow:auto;font-size:.86rem;line-height:1.35}}</style>',
                 unsafe_allow_html=True)
     with st.container(key=f"whisper_box_{lane}"):
-        note("PROMETHEUS LAB WHISPERS A WAR SECRET", esc_note(st.session_state[wkey]))
+        note("PROMETHEUS CITADEL WHISPERS A WAR SECRET", esc_note(st.session_state[wkey]))
     components.html(_skirmish_html(st.session_state.get("player_name", "Challenger"),
                                    lane, lt["model"], lt["color"]),
                     height=560, scrolling=False)
@@ -3190,7 +3190,7 @@ def coach_stage():
     lane = d.get("lane", "doubles")
     lt = _LIEUTENANTS[lane]
     st.markdown('<div class="gwb-kicker">After-battle debrief</div>', unsafe_allow_html=True)
-    st.title("Prometheus Lab reads your battle")
+    st.title("Prometheus Citadel reads your battle")
     misses = [m for m in d.get("misses", []) if m]
     ck = f"coach_{lane}_{d.get('score')}_{len(misses)}"
     if ck not in st.session_state.get("skirmish_seen", set()):
@@ -3423,7 +3423,7 @@ def boss_stage():
                 "Pick the ONE lieutenant whose speed drill will help them most.")
     pick = st.session_state.get("lt_pick") or {}
     if pick.get("why"):
-        note(f"Prometheus Lab sends you to {pick['name']}", esc_note(pick["why"]))
+        note(f"Prometheus Citadel sends you to {pick['name']}", esc_note(pick["why"]))
 
     lc = st.columns(3)
     for _i, (_lane, _lt) in enumerate(_LIEUTENANTS.items()):
@@ -3628,7 +3628,7 @@ def quiz():
     if st.session_state.get("adventure"):
         strand0 = st.session_state.quiz[0]["strand"] if st.session_state.get("quiz") else None
         mon = MONSTERS.get(strand0)
-        st.markdown('<div class="gwb-kicker">PROMETHEUS LAB</div>', unsafe_allow_html=True)
+        st.markdown('<div class="gwb-kicker">PROMETHEUS CITADEL</div>', unsafe_allow_html=True)
         st.title(f"Face {mon['monster']}" if mon else "The Challenge")
         if mon:
             # markdown turns indented HTML into a code block - keep this flush-left
@@ -3710,7 +3710,7 @@ def results():
                   f"{len(st.session_state.get('answers', {}))}")
 
     if st.session_state.get("adventure"):
-        st.markdown('<div class="gwb-kicker">PROMETHEUS LAB</div>', unsafe_allow_html=True)
+        st.markdown('<div class="gwb-kicker">PROMETHEUS CITADEL</div>', unsafe_allow_html=True)
         st.title("The Battle Report")
     else:
         st.title("Results")
@@ -3946,7 +3946,7 @@ def mastery_stage():
     # every answered check question puts a new lesson and verdict at the top
     scroll_to_top(f"mastery-{s.attempts}-{s.state}")
     st.markdown('<div class="gwb-kicker">' +
-                ("PROMETHEUS LAB · TRAINING GROUNDS" if st.session_state.get("adventure")
+                ("PROMETHEUS CITADEL · TRAINING GROUNDS" if st.session_state.get("adventure")
                  else "Autonomous practice") + '</div>', unsafe_allow_html=True)
     st.title(("Defeat the snare: " if st.session_state.get("adventure") else "Mastering: ")
              + s.trick_name)

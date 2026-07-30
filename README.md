@@ -1,4 +1,4 @@
-# PROMETHEUS LAB
+# PROMETHEUS CITADEL
 
 *A math adventure powered by OpenAI's GPT-4o-mini — built for the GDG Windsor Build with AI hackathon, Edge/On-Device track.*
 
@@ -15,7 +15,7 @@
 <img width="1157" height="782" alt="taha" src="https://github.com/user-attachments/assets/e37f082b-d0f8-49d5-b08b-69f19226e177" />
 <br>
 <br>
-<b>An encounter: the monster calls you by name, and Prometheus Lab writes what it remembers about you.</b>
+<b>An encounter: the monster calls you by name, and Prometheus Citadel writes what it remembers about you.</b>
 <br>
 <br>
 <br>
@@ -65,11 +65,11 @@ And above them all: **THE COLLECTOR**, a giant skull who runs mental-math speed 
 1. Watch the introduction, or skip it. Then enter your hero name — the monsters will use it, and they will remember you.
 2. Enter the Citadel. Drag to orbit the castle, then click a monster on its platform. **Sound: on** in the header turns the music and the battle audio off and on; every arena honours it.
 3. The encounter takes over the screen. The monster taunts you by name; come back after a loss and it gloats about last time.
-4. Face its quiz. The battle report shows exactly which tricks got you, then a Prometheus Lab-grounded study guide explains each one — with real fraction and exponent notation, never recomputed math.
-5. Now the agent steps in: it teaches, then puts a fresh check question to you and reads both your answer and your typed reasoning. Say how you got there and the citadel answers you back, in its own voice, naming the idea you got right or the one that slipped. A right answer with wobbly reasoning does not count. When a lesson doesn't land, Prometheus Lab switches teaching strategies and tells you why.
-6. Master the trick and Prometheus Lab forges you a relic — a trophy written from your actual battle. Struggle too long and the Collector is summoned instead, along with a Prometheus Lab-written note for mum and dad.
-7. Prometheus Lab also decides where you go next: after a battle it names the monster worth hunting and says what in your run made that the answer, and outside the Collector's arena it picks which lieutenant to drill.
-8. Between battles, hit the training grounds: 90-second war-clock skirmishes against the lieutenants, with streaks that raise the stakes. Prometheus Lab whispers each lane's mental strategy before the fight, and afterward **GET COACHED BY PROMETHEUS LAB** names your miss pattern, teaches the fix, and sets a three-question drill.
+4. Face its quiz. The battle report shows exactly which tricks got you, then a Prometheus Citadel-grounded study guide explains each one — with real fraction and exponent notation, never recomputed math.
+5. Now the agent steps in: it teaches, then puts a fresh check question to you and reads both your answer and your typed reasoning. Say how you got there and the citadel answers you back, in its own voice, naming the idea you got right or the one that slipped. A right answer with wobbly reasoning does not count. When a lesson doesn't land, Prometheus Citadel switches teaching strategies and tells you why.
+6. Master the trick and Prometheus Citadel forges you a relic — a trophy written from your actual battle. Struggle too long and the Collector is summoned instead, along with a Prometheus Citadel-written note for mum and dad.
+7. Prometheus Citadel also decides where you go next: after a battle it names the monster worth hunting and says what in your run made that the answer, and outside the Collector's arena it picks which lieutenant to drill.
+8. Between battles, hit the training grounds: 90-second war-clock skirmishes against the lieutenants, with streaks that raise the stakes. Prometheus Citadel whispers each lane's mental strategy before the fight, and afterward **GET COACHED BY PROMETHEUS CITADEL** names your miss pattern, teaches the fix, and sets a three-question drill.
 9. Defeat all five monsters to break the seal on the golden gate and free whoever is locked in the keep.
 
 Not in the mood for monsters? Simple mode (no game, same brain) is one click away.
@@ -81,13 +81,13 @@ There is a **For mum and dad** button pinned to every screen. It opens the lette
 - A note goes home after **any** battle where something was missed — not just the bad days — so the pattern and the progress are both visible.
 - Beating a trick is a letter too. Good news gets sent, with the evidence the agent used to call it mastery.
 - The notes are kept on this machine (`data/letters/`), so closing the tab does not lose them. They also download as one file.
-- Each trick on the page offers **Make a practice sheet**: ten questions on that one trick, printable, with space to work and an answer key on its own page. Verified bank questions go on first; if Prometheus Lab writes any extras, it has to solve each one again — blind, without seeing the key it just wrote — and agree with itself before it reaches the paper.
+- Each trick on the page offers **Make a practice sheet**: ten questions on that one trick, printable, with space to work and an answer key on its own page. Verified bank questions go on first; if Prometheus Citadel writes any extras, it has to solve each one again — blind, without seeing the key it just wrote — and agree with itself before it reaches the paper.
 
 ## What GEMMA does behind the curtain
 
-Prometheus Lab calls OpenAI's GPT-4o-mini to do the actual thinking, one job per line:
+Prometheus Citadel calls OpenAI's GPT-4o-mini to do the actual thinking, one job per line:
 
-| Job | What Prometheus Lab does |
+| Job | What Prometheus Citadel does |
 |---|---|
 | Rescue lessons | Writes the lesson that pulls you out after a monster gets you. |
 | Reasoning check | Reads HOW you got your answer — a right answer with wobbly reasoning does not count. |

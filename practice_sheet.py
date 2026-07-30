@@ -416,14 +416,14 @@ def _render(trick_name: str, strand: str, items: list) -> str:
 
     key = ['<section class="key">', "<h2>Answer key</h2>",
            '<p class="key-note">Every answer below comes from the verified '
-           'question bank or from a question Prometheus Lab wrote and then solved again '
+           'question bank or from a question Prometheus Citadel wrote and then solved again '
            'blind to check its own key. Where the bank supplies working, it is '
            'printed with the answer.</p>',
            '<ol class="key-list">']
     for item in items:
         key.append("<li>")
         label = f'{_esc(item["correct"])}) ' if item.get("correct") else ""
-        tag = (' <span class="src">written by Prometheus Lab, self-checked</span>'
+        tag = (' <span class="src">written by Prometheus Citadel, self-checked</span>'
                if item.get("source") == "generated" else "")
         key.append(f'<p class="answer"><span class="label">Answer:</span> '
                    f'{label}{_esc(_space_math(item.get("answer", "")))}{tag}</p>')
@@ -443,7 +443,7 @@ def _render(trick_name: str, strand: str, items: list) -> str:
         f"<title>Practice sheet - {_esc(trick_name)}</title>\n"
         f"<style>{_CSS}</style>\n</head>\n<body>\n"
         f"{head}\n<hr>\n" + "\n".join(body) + "\n" + "\n".join(key) +
-        "\n<footer>Made by PROMETHEUS LAB. Every question on this sheet was "
+        "\n<footer>Made by PROMETHEUS CITADEL. Every question on this sheet was "
         "verified before it was printed.</footer>\n</body>\n</html>\n"
     )
 

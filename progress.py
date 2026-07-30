@@ -1,7 +1,7 @@
 """
 progress.py  —  the progress summary at the top of the letters-home page.
 
-THE RULE THIS MODULE EXISTS TO ENFORCE: CODE COMPUTES THE NUMBERS, PROMETHEUS LAB ONLY
+THE RULE THIS MODULE EXISTS TO ENFORCE: CODE COMPUTES THE NUMBERS, PROMETHEUS CITADEL ONLY
 INTERPRETS THEM. Every count, every best and latest drill score, every trend
 and the headline itself are worked out here in plain Python from the session's
 own records. The model is never asked how many, how often or whether something

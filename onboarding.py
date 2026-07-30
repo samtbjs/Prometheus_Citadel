@@ -1,4 +1,4 @@
-"""First-run intro for PROMETHEUS LAB.
+"""First-run intro for PROMETHEUS CITADEL.
 
 A five-beat opening scene rendered in the same 3D world as the citadel hub and
 the encounter halls: title, the roster of five, how a battle goes, the
@@ -164,7 +164,7 @@ ONBOARDING_TEMPLATE = r"""
   <div id="ui">
     <div id="copy">
       <div class="beat on" data-s="1">
-        <h1>Prometheus Lab</h1>
+        <h1>Prometheus Citadel</h1>
         <p>Five monsters. One citadel. Every single one of them wants you to get it wrong.</p>
       </div>
       <div class="beat" data-s="2">
