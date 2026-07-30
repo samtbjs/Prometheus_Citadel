@@ -19,3 +19,30 @@ CHAPTER_3_ACCENT = "#a06de0"   # Quantum — violet (not used yet)
 MENTOR_ACCENT = "#c9d6da"
 
 FONT_STACK = "'Share Tech Mono', 'Courier New', monospace"
+DISPLAY_FONT_STACK = "'Orbitron', 'Share Tech Mono', sans-serif"
+
+# ---------------------------------------------------------------------
+# VISUAL REDESIGN: full design-system layer. Nothing above this line
+# changes meaning or is removed -- existing imports/getattr lookups
+# (app.py, ui/scene_viewer.py, chapter["accent_token"] strings in
+# data/anomalies.json) keep working exactly as before. Everything below
+# is new, additive vocabulary for the "premium sci-fi facility" restyle
+# (ui/styles.py + mission-card markup in ui/scene_viewer.py read these).
+# ---------------------------------------------------------------------
+PRIMARY = CHAPTER_1_ACCENT          # cyan -- primary interactive accent
+SECONDARY = CHAPTER_3_ACCENT        # violet -- secondary/quantum accent
+ACCENT = CHAPTER_1_ACCENT
+WARNING = "#f4913a"                 # orange -- warning states, "thin" verdict
+SUCCESS = "#4ade80"
+ERROR = "#f0475a"
+
+BACKGROUND = BG_VOID
+SURFACE = "rgba(255, 255, 255, 0.035)"       # glass panel fill
+SURFACE_RAISED = "rgba(255, 255, 255, 0.06)"  # slightly brighter glass (hover/selected)
+BORDER = "rgba(45, 214, 224, 0.28)"
+BORDER_MUTED = "rgba(255, 255, 255, 0.12)"
+GLOW = "rgba(45, 214, 224, 0.55)"
+GLOW_WARNING = "rgba(244, 145, 58, 0.55)"
+
+TEXT = TEXT_MAIN
+TEXT_MUTED = TEXT_DIM

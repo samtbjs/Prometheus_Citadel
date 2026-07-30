@@ -56,7 +56,7 @@ FRAGILITY WARNING (read this if something doesn't render right):
 
 import streamlit as st
 
-from ui.design_tokens import BG_VOID, TEXT_MAIN, TEXT_DIM, CHAPTER_1_ACCENT
+from ui.design_tokens import BG_VOID, TEXT_MAIN, TEXT_DIM, CHAPTER_1_ACCENT, WARNING, SECONDARY
 
 # NOTE (this milestone): styles.py now reads its palette from
 # design_tokens.py instead of hardcoding the same hex values a second
@@ -70,12 +70,17 @@ _ROOT_VARS = f"""
     --accent-dim: rgba(45, 214, 224, 0.18);
     --panel-bg: rgba(255, 255, 255, 0.035);
     --panel-border: rgba(45, 214, 224, 0.28);
+    --secondary: {SECONDARY};
     --success: #4ade80;
-    --warning: #fbbf24;
-    --error: #f87171;
+    --warning: {WARNING};
+    --warning-glow: rgba(244, 145, 58, 0.5);
+    --error: #f0475a;
     --text-main: {TEXT_MAIN};
     --text-dim: {TEXT_DIM};
     --bg-void: {BG_VOID};
+    --surface: rgba(255, 255, 255, 0.04);
+    --surface-raised: rgba(255, 255, 255, 0.07);
+    --blur: blur(14px);
 }}
 """
 
@@ -361,6 +366,96 @@ button[kind="primary"] {
 button[kind="primary"]:hover {
     box-shadow: 0 0 22px var(--accent-glow) !important;
 }
+
+/* =======================================================================
+   VISUAL REDESIGN PASS -- "premium research-facility" depth layer.
+   Additive only: every rule below cascades on top of the identical-or-
+   lower-specificity rules above (same selectors, later in the sheet, or
+   more specific) -- nothing above this line is removed, no data-testid
+   hooks are renamed, no Streamlit widget is replaced. Pure look-and-feel.
+   ======================================================================= */
+
+/* ---- Depth: layered ambient lighting behind the whole app ------------ */
+.stApp {
+    background:
+        radial-gradient(ellipse 900px 500px at 15% -10%, rgba(45,214,224,0.10), transparent 60%),
+        radial-gradient(ellipse 700px 500px at 110% 10%, rgba(160,109,224,0.08), transparent 55%),
+        radial-gradient(ellipse 1000px 700px at 50% 120%, rgba(244,145,58,0.05), transparent 60%),
+        var(--bg-void) !important;
+}
+
+/* ---- Cinematic title: bigger, tighter, gradient-lit ------------------- */
+h1 {
+    font-size: clamp(1.9rem, 3.2vw, 2.8rem) !important;
+    font-weight: 800 !important;
+    background: linear-gradient(120deg, var(--text-main) 40%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+    text-shadow: none;
+    filter: drop-shadow(0 0 20px var(--accent-glow));
+    border-bottom: 1px solid var(--panel-border);
+    margin-bottom: 0.9rem !important;
+}
+h2 {
+    color: var(--text-main) !important;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 1.15rem !important;
+    border-left: 3px solid var(--secondary);
+    padding-left: 0.6rem;
+    opacity: 0.92;
+}
+
+/* ---- Glassmorphism: panels get real depth (blur + layered shadow) ---- */
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stAlert"],
+[data-testid="stMetric"] {
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    background: linear-gradient(155deg, var(--surface-raised), var(--surface)) !important;
+    box-shadow:
+        0 10px 34px rgba(0, 0, 0, 0.45),
+        0 0 26px rgba(45, 214, 224, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    box-shadow:
+        0 14px 40px rgba(0, 0, 0, 0.5),
+        0 0 34px rgba(45, 214, 224, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ---- Control-panel buttons: beveled corners, layered glow ------------- */
+.stButton > button {
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    font-weight: 600;
+    box-shadow: 0 0 0 rgba(0,0,0,0), inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+.stButton > button:hover {
+    box-shadow: 0 0 22px var(--accent-glow), inset 0 0 14px rgba(255,255,255,0.08);
+}
+.stButton > button:disabled {
+    color: var(--text-dim) !important;
+    border-color: var(--panel-border) !important;
+    opacity: 0.45;
+    box-shadow: none !important;
+}
+button[kind="primary"] {
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    box-shadow: 0 0 26px var(--accent-glow) !important, inset 0 0 16px rgba(255,255,255,0.10) !important;
+}
+
+/* ---- Orange warning accent: "thin"/degraded state cards --------------
+   Anything explicitly flagged with this class (used sparingly, e.g. a
+   locked-mission label) reads as an amber warning rather than the
+   default cyan, matching the sci-fi "caution" panel convention. */
+.pl-warning-glow {
+    border-color: var(--warning) !important;
+    box-shadow: 0 0 18px var(--warning-glow) inset !important;
+}
+.pl-warning-glow, .pl-warning-glow * { color: var(--warning) !important; }
 
 </style>
 """

@@ -162,24 +162,36 @@ def render_boot_scene():
 
 
 def _station_html(name, accent_hex, unlocked):
-    """One station card's markup, matching the original hardcoded look,
-    just with real data swapped in for name/color/lock-state."""
+    """One station card's markup -- same .cc-station hook the scene's own
+    GSAP reveal targets (see command_center.html), just restyled: glass
+    panel + corner-bracket frame, a glowing "rewarding" look once
+    unlocked, a dim dashed "mysterious" look while locked."""
     if unlocked:
         border = accent_hex
-        bg = "rgba(45,214,224,0.06)"
+        bg = f"linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))"
         label_color = accent_hex
-        label = "UNLOCKED"
+        label = "\u25B8 UNLOCKED"
         text_color = "#e6f1f3"
+        border_style = "solid"
+        glow = f"box-shadow:0 0 24px {accent_hex}55, inset 0 1px 0 rgba(255,255,255,0.06);"
     else:
         border = "#3a4650"
-        bg = "rgba(255,255,255,0.03)"
-        label_color = "#8aa0aa"
-        label = "LOCKED"
-        text_color = "#8aa0aa"
+        bg = "rgba(255,255,255,0.02)"
+        label_color = "#5c6b74"
+        label = "\u2612 LOCKED"
+        text_color = "#5c6b74"
+        border_style = "dashed"
+        glow = "box-shadow:0 4px 18px rgba(0,0,0,0.4);"
     return f"""
-      <div class="cc-station" style="opacity:0;border:1px solid {border};border-radius:6px;padding:10px 16px;min-width:140px;background:{bg};">
-        <div style="color:{label_color};font-size:12px;letter-spacing:1px;">{label}</div>
-        <div style="color:{text_color};font-size:14px;margin-top:4px;">{name}</div>
+      <div class="cc-station" style="opacity:0;position:relative;border:1px {border_style} {border};
+          border-radius:4px;padding:12px 20px;min-width:150px;background:{bg};
+          backdrop-filter:blur(10px);{glow}">
+        <div style="position:absolute;top:-1px;left:-1px;width:9px;height:9px;
+            border-top:2px solid {border};border-left:2px solid {border};"></div>
+        <div style="position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;
+            border-bottom:2px solid {border};border-right:2px solid {border};"></div>
+        <div style="color:{label_color};font-size:11px;letter-spacing:1.5px;font-family:'Share Tech Mono',monospace;">{label}</div>
+        <div style="color:{text_color};font-size:14px;margin-top:5px;font-family:'Orbitron',sans-serif;letter-spacing:0.03em;">{name}</div>
       </div>"""
 
 

@@ -396,7 +396,11 @@ for msg in list(st.session_state.feedback_messages):
             st.rerun()
 
 if st.session_state.cleared:
-    st.success("🎉 Anomaly Cleared!")
+    # NOTE: no st.success() banner here on purpose -- the Debrief scene
+    # (see the "debrief" view above) already delivers this moment in
+    # ARBITER's voice the instant the anomaly is newly cleared. A second,
+    # generic "Anomaly Cleared!" banner here would just be redundant noise
+    # on every later visit to an already-cleared anomaly.
     if st.button("Restart This Anomaly"):
         st.session_state.question_index = 0
         st.session_state.streak = 0

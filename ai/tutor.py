@@ -19,7 +19,7 @@ To get both pieces of information out of a single reply, we ask the
 model to answer in a strict, two-line format:
 
     VERDICT: resolved
-    RESPONSE: Good work, Engineer. The readings check out.
+    RESPONSE: Good work, Researcher. The readings check out.
 
 We then parse that text ourselves with a small, defensive parser. If
 anything about the reply doesn't match what we expect (missing line,
@@ -66,7 +66,7 @@ MAX_TOKENS = 300
 # rule -- this is a safety-net line, not a real diagnosis.
 # -----------------------------------------------------------------------
 GENERIC_FALLBACK_RESPONSE = (
-    "Diagnostic link unstable, Engineer. Trust the instruments in front "
+    "Diagnostic link unstable, Researcher. Trust the instruments in front "
     "of you and try that reasoning again."
 )
 
@@ -80,7 +80,7 @@ GENERIC_FALLBACK_RESPONSE = (
 SYSTEM_PROMPT = (
     "You are the ship's diagnostic AI aboard a research station -- "
     "friendly but precise, and you always address the student as "
-    "'Engineer'. You will be given a question, the concept the student "
+    "'Researcher'. You will be given a question, the concept the student "
     "is expected to understand, and the student's one-sentence "
     "explanation. Judge ONLY the quality of their reasoning -- you must "
     "NEVER do any physics/chemistry math yourself and NEVER state or "
@@ -156,7 +156,7 @@ def _parse_verdict_and_response(raw_text):
     dialogue line out of a single raw reply that should look like:
 
         VERDICT: resolved
-        RESPONSE: Good work, Engineer. The readings check out.
+        RESPONSE: Good work, Researcher. The readings check out.
 
     We use regular expressions with re.IGNORECASE and re.DOTALL so this
     still works even if the model changes capitalization slightly, adds

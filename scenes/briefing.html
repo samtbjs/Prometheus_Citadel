@@ -16,9 +16,13 @@
       font-family:'Share Tech Mono','Courier New',monospace; }
     #wrap { display:flex; width:100%; height:100%; box-sizing:border-box; }
     #coreHalf { flex:0 0 38%; position:relative; }
-    #panel { flex:1; display:flex; flex-direction:column; justify-content:center; padding:28px 32px; color:#e6f1f3; }
-    .label { color:__ACCENT_HEX_CSS__; letter-spacing:1px; font-size:12px; margin-bottom:14px; }
-    .chapterName { font-size:20px; margin-bottom:14px; }
+    #panel { flex:1; position:relative; display:flex; flex-direction:column; justify-content:center;
+      padding:28px 32px; margin:14px 14px 14px 0; color:#e6f1f3;
+      background:linear-gradient(155deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+      border:1px solid rgba(255,255,255,0.08); border-left:2px solid __ACCENT_HEX_CSS__; border-radius:4px;
+      backdrop-filter:blur(10px); box-shadow:0 10px 30px rgba(0,0,0,0.4); }
+    .label { color:__ACCENT_HEX_CSS__; letter-spacing:2px; font-size:11px; margin-bottom:14px; text-transform:uppercase; }
+    .chapterName { font-size:22px; font-family:'Orbitron','Share Tech Mono',sans-serif; letter-spacing:0.03em; margin-bottom:14px; }
     .dialogueLine { font-size:15px; line-height:1.6; color:#e6f1f3; margin-bottom:10px; }
   </style>
 </head>
