@@ -20,7 +20,9 @@
   <script>
     const ACCENT_HEX = __ACCENT_HEX_JS__;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    const BASE_FOV = 45;
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
+    pmFitCamera(camera, window.innerWidth, window.innerHeight, { baseFov: BASE_FOV });
     camera.position.set(0, 0, 4.2);
     camera.lookAt(0, 0, 0);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -40,14 +42,13 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      __CORE_IDLE_JS__
+      if (!PM_REDUCED_MOTION) { __CORE_IDLE_JS__ }
       renderer.render(scene, camera);
     }
     animate();
 
     window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+      pmFitCamera(camera, window.innerWidth, window.innerHeight, { baseFov: BASE_FOV });
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>

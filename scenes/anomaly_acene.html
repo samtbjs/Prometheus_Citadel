@@ -54,7 +54,9 @@
     const BASE_FOG_DENSITY = 0.035;
     scene.fog = new THREE.FogExp2(0x05080a, BASE_FOG_DENSITY);
 
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    const BASE_FOV = 50;
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
+    pmFitCamera(camera, window.innerWidth, window.innerHeight, { baseFov: BASE_FOV });
     camera.position.set(3, 2, 5);
     camera.lookAt(0, 0, 0);
 
@@ -89,17 +91,19 @@
 
     function stabilize() {
       flashEl.style.color = ACCENT_CSS;
-      gsap.fromTo(flashEl, { opacity: 0 }, { opacity: 0.45, duration: 0.25, yoyo: true, repeat: 1, ease: "power1.inOut" });
+      const tl = gsap.timeline();
+      tl.fromTo(flashEl, { opacity: 0 }, { opacity: 0.45, duration: 0.25, yoyo: true, repeat: 1, ease: "power1.inOut" }, 0);
       reactiveMeshes.forEach((mat) => {
-        gsap.fromTo(mat.emissive, { r: 0, g: 0, b: 0 }, {
+        tl.fromTo(mat.emissive, { r: 0, g: 0, b: 0 }, {
           r: accentColor.r * 0.9, g: accentColor.g * 0.9, b: accentColor.b * 0.9,
           duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut",
-        });
+        }, 0);
       });
-      gsap.to(focalGroup.scale, { x: 1.12, y: 1.12, z: 1.12, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut" });
-      gsap.to(scene.fog, { density: BASE_FOG_DENSITY * 0.25, duration: 1.2, ease: "power2.out" });
-      gsap.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 3.2, duration: 0.5, ease: "power2.out" });
-      gsap.to(reactionState, { speed: 0.15, duration: 1.2, ease: "power2.out" });
+      tl.to(focalGroup.scale, { x: 1.12, y: 1.12, z: 1.12, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut" }, 0);
+      tl.to(scene.fog, { density: BASE_FOG_DENSITY * 0.25, duration: 1.2, ease: "power2.out" }, 0);
+      tl.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 3.2, duration: 0.5, ease: "power2.out" }, 0);
+      tl.to(reactionState, { speed: 0.15, duration: 1.2, ease: "power2.out" }, 0);
+      pmSkip(tl);
     }
 
     function destabilize() {
@@ -123,6 +127,7 @@
       shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(focalGroup.position, { x: baseX, z: baseZ, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(reactionState, { speed: 1, duration: 1.0, ease: "power2.out" }, 0.5);
+      pmSkip(shudder);
     }
 
     if (REACTION_VERDICT === "resolved") {
@@ -140,8 +145,7 @@
     animate();
 
     window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+      pmFitCamera(camera, window.innerWidth, window.innerHeight, { baseFov: BASE_FOV });
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>

@@ -30,4 +30,8 @@ def build_dialogue_reveal_js(line_count, id_prefix="dialogueLine", start_delay=0
         f'{round(start_delay + i * gap, 2)})'
         for i in range(line_count)
     )
-    return f"gsap.timeline()\n{steps};"
+    # MILESTONE 7: no trailing ";" here -- the caller (scenes/briefing.html)
+    # wraps this expression in pmSkip(...) so the reveal can be jumped
+    # straight to its end state under reduced motion; the ";" is added
+    # there, after the closing paren of pmSkip(...).
+    return f"gsap.timeline()\n{steps}"

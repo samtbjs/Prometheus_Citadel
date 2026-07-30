@@ -20,6 +20,12 @@ from ui.focal_objects import FOCAL_OBJECT_CONFIG
 from ui.mentor_visual import MENTOR_CORE_CONFIG
 from ui.transitions import build_streaks_html
 from ui.dialogue import build_dialogue_lines_html, build_dialogue_reveal_js
+from ui.motion import MOTION_JS
+
+# MILESTONE 7: inlined ahead of every scene's own <script>, right after
+# gsap (see this module's header + ui/motion.py's docstring). Every
+# full_html assembly below adds this same one extra <script> tag.
+_MOTION_SCRIPT = f"<script>{MOTION_JS}</script>"
 
 _THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
 _PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
@@ -119,7 +125,7 @@ def _render_vendored_scene(scene_filename, label, height=420):
         _render_intro_fallback(label, height)
         return
 
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=height)
 
 
@@ -145,7 +151,8 @@ def render_transition_scene(accent_hex=None, height=180):
         components.html(f"<div style='width:100%;height:100%;background:{tokens.BG_VOID};'></div>", height=height)
         return
     scene_html = scene_html.replace("__STREAKS_HTML__", build_streaks_html(accent_hex))
-    full_html = f"<script>{gsap_js}</script>" + scene_html
+    scene_html = scene_html.replace("__ACCENT_HEX_CSS__", accent_hex)
+    full_html = f"<script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=height)
 
 
@@ -204,7 +211,7 @@ def render_command_center_scene(stations=None):
         _render_intro_fallback("COMMAND CENTER", 420)
         return
     scene_html = scene_html.replace("__STATIONS_HTML__", stations_html)
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=420)
 
 
@@ -252,7 +259,7 @@ def render_anomaly_scene(anomaly_id, verdict=None):
     scene_html = scene_html.replace("__ACCENT_HEX_CSS__", accent_hex)
     scene_html = scene_html.replace("__FOCAL_SETUP_JS__", config["focal_setup_js"])
     scene_html = scene_html.replace("__IDLE_TICK_JS__", config["idle_tick_js"])
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=SCENE_HEIGHT_PX)
 
 
@@ -280,7 +287,7 @@ def render_mentor_core(mentor_id="arbiter", height=180):
     scene_html = scene_html.replace("__ACCENT_HEX_JS__", "0x" + accent_hex.lstrip("#"))
     scene_html = scene_html.replace("__CORE_SETUP_JS__", config["core_setup_js"])
     scene_html = scene_html.replace("__CORE_IDLE_JS__", config["core_idle_js"])
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=height)
 
 
@@ -351,7 +358,7 @@ def render_briefing_scene(chapter_name, mentor_name, lines, accent_hex, mentor_i
     scene_html = scene_html.replace("__CHAPTER_NAME__", chapter_name)
     scene_html = scene_html.replace("__DIALOGUE_LINES_HTML__", dialogue_html)
     scene_html = scene_html.replace("__DIALOGUE_REVEAL_JS__", dialogue_js)
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=height)
 
 
@@ -386,5 +393,5 @@ def render_debrief_scene(anomaly_name, mentor_name, mentor_line, newly_unlocked_
     scene_html = scene_html.replace("__ANOMALY_NAME__", anomaly_name)
     scene_html = scene_html.replace("__MENTOR_LINE__", mentor_line)
     scene_html = scene_html.replace("__UNLOCK_HTML__", unlock_html)
-    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + _MOTION_SCRIPT + scene_html
     components.html(full_html, height=height)
