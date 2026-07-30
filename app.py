@@ -404,23 +404,6 @@ if st.session_state.cleared:
 
         update_anomaly_progress(st.session_state.progress, selected_id, 0, 0, False)
         save_progress(st.session_state.progress)
-
-        # MILESTONE 5: a FRESH clear (wasn't cleared before this click)
-        # routes to the Debrief scene instead of falling through to the
-        # old flat "🎉 Anomaly Cleared!" box, which only still shows if
-        # you re-enter an already-cleared anomaly later.
-        if st.session_state.cleared and not was_cleared_before:
-            unlocked_after = {
-                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
-            }
-            newly_unlocked = [
-                chapters[cid]["name"] for cid in chapters
-                if not unlocked_before[cid] and unlocked_after[cid]
-            ]
-            st.session_state.debrief_anomaly_id = selected_id
-            st.session_state.debrief_newly_unlocked = newly_unlocked
-            st.session_state.view = "debrief"
-
         st.rerun()
 else:
     q = questions[st.session_state.question_index]
@@ -593,6 +576,29 @@ else:
             st.session_state.cleared,
         )
         save_progress(st.session_state.progress)
+
+        # MILESTONE 7 FIX: this is the actual "just cleared" -> Debrief
+        # routing (previously misplaced under the Restart button, where
+        # it referenced an undefined variable and could never run --
+        # meaning the Debrief scene never appeared after a real clear).
+        # was_cleared_before/unlocked_before were captured above, before
+        # this submission changed anything, so the comparison is valid.
+        if st.session_state.cleared and not was_cleared_before:
+            unlocked_after = {
+                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+            }
+            newly_unlocked = [
+                chapters[cid]["name"] for cid in chapters
+                if not unlocked_before[cid] and unlocked_after[cid]
+            ]
+            st.session_state.debrief_anomaly_id = selected_id
+            st.session_state.debrief_newly_unlocked = newly_unlocked
+            chapter_id = st.session_state.current_chapter
+            debrief_accent = (
+                getattr(tokens, chapters[chapter_id]["accent_token"])
+                if chapter_id in chapters else tokens.MENTOR_ACCENT
+            )
+            _begin_transition(view="debrief", accent_hex=debrief_accent)
 
         st.rerun()
 
