@@ -395,6 +395,12 @@ for msg in list(st.session_state.feedback_messages):
             ]
             st.rerun()
 
+# PHASE 6 (this session): no UI for snare tagging yet -- just a debug-only
+# readout, behind the existing ?debug=1 flag, so you can verify a wrong/
+# thin answer is capturing a snare id in session state.
+if debug_mode:
+    st.caption(f"DEBUG — last tagged snare: {st.session_state.get('last_snare_id')}")
+
 if st.session_state.cleared:
     # NOTE: no st.success() banner here on purpose -- the Debrief scene
     # (see the "debrief" view above) already delivers this moment in
@@ -512,6 +518,7 @@ else:
                     question_prompt=q["prompt"],
                     expected_concept=q["answer"],
                     student_explanation=explanation,
+                    known_snares=q.get("known_snares", []),
                 )
             except Exception as error:
                 # Covers things like: no internet, invalid/missing API
