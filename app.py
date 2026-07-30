@@ -1660,7 +1660,7 @@ def onboard_stage():
     st.text_input("device probe", key="onboard_device_probe",
                   label_visibility="collapsed", on_change=_device_probe)
     if "device_pick" not in st.session_state:
-        st.session_state["device_pick"] = "Phone"   # provisional until the probe
+        st.session_state["device_pick"] = "Computer"   # provisional until the probe
 
     st.text_input("Your name, challenger", key="onboard_name",
                   placeholder="What should the monsters call you?",
