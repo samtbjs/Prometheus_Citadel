@@ -1,6 +1,7 @@
 # PROMETHEUS CITADEL
 
-*A math adventure powered by OpenAI's GPT-4o-mini — built for the GDG Windsor Build with AI hackathon, Edge/On-Device track.*
+*A math adventure powered by OpenAI's GPT-4o-mini — built for Prometheus July AI Challenge
+.*
 
 ## Screenshots
 
