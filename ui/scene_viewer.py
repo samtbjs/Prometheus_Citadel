@@ -17,6 +17,7 @@ import streamlit.components.v1 as components
 
 import ui.design_tokens as tokens
 from ui.focal_objects import FOCAL_OBJECT_CONFIG
+from ui.mentor_visual import MENTOR_CORE_CONFIG
 
 _THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
 _PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
@@ -225,3 +226,89 @@ def render_anomaly_scene(anomaly_id, verdict=None):
     scene_html = scene_html.replace("__IDLE_TICK_JS__", config["idle_tick_js"])
     full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
     components.html(full_html, height=SCENE_HEIGHT_PX)
+
+
+# ---------------------------------------------------------------------
+# MILESTONE 5, Part A/B — ARBITER's reusable core visual, standalone
+# (render_mentor_core) and embedded in the Mission Debrief scene
+# (render_debrief_scene). Both read the SAME MENTOR_CORE_CONFIG entry,
+# per that config dict's header comment.
+# ---------------------------------------------------------------------
+def render_mentor_core(mentor_id="arbiter", height=180):
+    """Standalone reusable rendering of ARBITER's rotating core, for
+    anywhere the mentor "speaks" outside of the Debrief scene."""
+    config = MENTOR_CORE_CONFIG.get(mentor_id, MENTOR_CORE_CONFIG["arbiter"])
+    try:
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        scene_html = _read_file(os.path.join(_SCENES_DIR, "mentor_core.html"))
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more mentor core assets are empty.")
+    except (OSError, ValueError):
+        _render_intro_fallback("ARBITER CORE", height)
+        return
+
+    accent_hex = tokens.MENTOR_ACCENT
+    scene_html = scene_html.replace("__ACCENT_HEX_JS__", "0x" + accent_hex.lstrip("#"))
+    scene_html = scene_html.replace("__CORE_SETUP_JS__", config["core_setup_js"])
+    scene_html = scene_html.replace("__CORE_IDLE_JS__", config["core_idle_js"])
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=height)
+
+
+def _render_debrief_fallback(anomaly_name, mentor_name, mentor_line, newly_unlocked_names, height):
+    unlock_html = ""
+    if newly_unlocked_names:
+        unlock_html = (
+            f"<div style='margin-top:14px;color:#2dd6e0;'>"
+            f"NEW CHAPTER UNLOCKED: {', '.join(newly_unlocked_names)}</div>"
+        )
+    components.html(
+        f"""
+        <div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+            box-sizing:border-box;padding:24px;background:#05080a;font-family:monospace;color:#e6f1f3;">
+          <div style="max-width:480px;text-align:center;">
+            <div style="color:#8aa0aa;letter-spacing:1px;font-size:12px;">{mentor_name} // DEBRIEF</div>
+            <div style="font-size:18px;margin:8px 0;">Anomaly Stabilized: {anomaly_name}</div>
+            <div style="font-size:14px;line-height:1.5;">&quot;{mentor_line}&quot;</div>
+            {unlock_html}
+          </div>
+        </div>
+        """,
+        height=height,
+    )
+
+
+def render_debrief_scene(anomaly_name, mentor_name, mentor_line, newly_unlocked_names, mentor_id="arbiter", height=340):
+    """Stage: debrief. Shown once, right when an anomaly is newly cleared
+    (see app.py's ANALYZE handler). newly_unlocked_names is a list of
+    chapter names that just became unlocked because of this clear (may
+    be empty -- most clears don't unlock anything)."""
+    config = MENTOR_CORE_CONFIG.get(mentor_id, MENTOR_CORE_CONFIG["arbiter"])
+    try:
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        scene_html = _read_file(os.path.join(_SCENES_DIR, "debrief.html"))
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more debrief scene assets are empty.")
+    except (OSError, ValueError):
+        _render_debrief_fallback(anomaly_name, mentor_name, mentor_line, newly_unlocked_names, height)
+        return
+
+    accent_hex = tokens.MENTOR_ACCENT
+    unlock_html = ""
+    if newly_unlocked_names:
+        unlock_html = (
+            '<div class="unlockBox"><div class="unlockLabel">NEW CHAPTER UNLOCKED</div>'
+            f'<div class="unlockName">{", ".join(newly_unlocked_names)}</div></div>'
+        )
+    scene_html = scene_html.replace("__ACCENT_HEX_JS__", "0x" + accent_hex.lstrip("#"))
+    scene_html = scene_html.replace("__ACCENT_HEX_CSS__", accent_hex)
+    scene_html = scene_html.replace("__CORE_SETUP_JS__", config["core_setup_js"])
+    scene_html = scene_html.replace("__CORE_IDLE_JS__", config["core_idle_js"])
+    scene_html = scene_html.replace("__MENTOR_NAME__", mentor_name)
+    scene_html = scene_html.replace("__ANOMALY_NAME__", anomaly_name)
+    scene_html = scene_html.replace("__MENTOR_LINE__", mentor_line)
+    scene_html = scene_html.replace("__UNLOCK_HTML__", unlock_html)
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=height)

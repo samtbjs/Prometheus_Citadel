@@ -13,4 +13,9 @@ CHAPTER_1_ACCENT = "#2dd6e0"   # Mechanics — cyan (used in Milestone 1)
 CHAPTER_2_ACCENT = "#f4a640"   # Thermal — amber (not used yet)
 CHAPTER_3_ACCENT = "#a06de0"   # Quantum — violet (not used yet)
 
+# MILESTONE 5: the mentor AI's core visual uses this neutral steel/white
+# accent rather than any single chapter color, since ARBITER is a
+# facility-wide presence, not tied to one chapter.
+MENTOR_ACCENT = "#c9d6da"
+
 FONT_STACK = "'Share Tech Mono', 'Courier New', monospace"

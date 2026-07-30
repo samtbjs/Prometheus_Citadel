@@ -163,6 +163,18 @@ def debug_force_clear_chapter(progress, chapter):
     return progress
 
 
+def debug_force_clear_anomaly(progress, anomaly_id):
+    """
+    DEBUG-ONLY (only ever called from behind ?debug=1): instantly marks
+    ONE anomaly as cleared (streak=2), the same way
+    debug_force_clear_chapter does for a whole chapter, so the Milestone
+    5 Debrief scene can be tested repeatedly without grinding through
+    real questions each time.
+    """
+    update_anomaly_progress(progress, anomaly_id, 0, 2, True)
+    return progress
+
+
 def debug_reset_progress():
     """DEBUG-ONLY: wipes all saved progress back to a fresh save."""
     save_progress({})

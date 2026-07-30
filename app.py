@@ -12,12 +12,19 @@ from logic.streak_engine import (
     is_anomaly_cleared,
     is_chapter_unlocked,
     debug_force_clear_chapter,
+    debug_force_clear_anomaly,
     debug_reset_progress,
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
 from ui.styles import inject_custom_css
-from ui.scene_viewer import render_anomaly_scene, render_boot_scene, render_command_center_scene
+from ui.scene_viewer import (
+    render_anomaly_scene,
+    render_boot_scene,
+    render_command_center_scene,
+    render_debrief_scene,
+)
+from ui.mentor import MENTOR_NAME, debrief_line_for
 import ui.design_tokens as tokens
 
 inject_custom_css()
@@ -105,6 +112,39 @@ if st.session_state.intro_stage == "command_center":
             if st.button("Reset all progress", key="debug_reset_progress"):
                 st.session_state.progress = debug_reset_progress()
                 st.rerun()
+
+        # -------------------------------------------------------------
+        # MILESTONE 5: instantly jump to the Mission Debrief scene for
+        # any anomaly, so it can be tested repeatedly without grinding
+        # through real questions each time.
+        # -------------------------------------------------------------
+        st.caption("DEBUG: instantly trigger the Mission Debrief scene for any anomaly.")
+        debrief_choice = st.selectbox(
+            "Anomaly to instantly clear + debrief:", anomaly_ids, key="debug_debrief_choice"
+        )
+        if st.button("Trigger Debrief", key="debug_trigger_debrief"):
+            unlocked_before = {
+                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+            }
+            debug_force_clear_anomaly(st.session_state.progress, debrief_choice)
+            save_progress(st.session_state.progress)
+            unlocked_after = {
+                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+            }
+            newly_unlocked = [
+                chapters[cid]["name"] for cid in chapters
+                if not unlocked_before[cid] and unlocked_after[cid]
+            ]
+            owning_chapter = next(
+                (cid for cid in chapters if debrief_choice in chapters[cid]["anomalies"]), None
+            )
+            st.session_state.current_chapter = owning_chapter
+            st.session_state.current_anomaly = debrief_choice
+            st.session_state.debrief_anomaly_id = debrief_choice
+            st.session_state.debrief_newly_unlocked = newly_unlocked
+            st.session_state.intro_stage = "done"
+            st.session_state.view = "debrief"
+            st.rerun()
     st.stop()
 
 st.title("Prometheus Lab")
@@ -188,6 +228,26 @@ if st.session_state.view == "menu":
                 st.rerun()
     st.stop()
 
+# -----------------------------------------------------------------------
+# MILESTONE 5, Part B: Mission Debrief. Shown once, right when an anomaly
+# is newly cleared (see the ANALYZE handler below), before returning to
+# the chapter menu. A separate "view" state, same pattern as "menu" vs
+# "anomaly_room" above -- doesn't touch either of their logic.
+# -----------------------------------------------------------------------
+if st.session_state.view == "debrief":
+    debrief_id = st.session_state.get("debrief_anomaly_id")
+    debrief_anomaly_name = anomalies.get(debrief_id, {}).get("name", debrief_id or "Unknown Anomaly")
+    render_debrief_scene(
+        anomaly_name=debrief_anomaly_name,
+        mentor_name=MENTOR_NAME,
+        mentor_line=debrief_line_for(debrief_id),
+        newly_unlocked_names=st.session_state.get("debrief_newly_unlocked", []),
+    )
+    if st.button("Continue", type="primary"):
+        st.session_state.view = "menu"
+        st.rerun()
+    st.stop()
+
 # From here down we are inside "anomaly_room" for st.session_state.current_anomaly.
 selected_id = st.session_state.current_anomaly
 
@@ -234,6 +294,22 @@ if st.session_state.cleared:
 
         update_anomaly_progress(st.session_state.progress, selected_id, 0, 0, False)
         save_progress(st.session_state.progress)
+
+        # MILESTONE 5: a FRESH clear (wasn't cleared before this click)
+        # routes to the Debrief scene instead of falling through to the
+        # old flat "🎉 Anomaly Cleared!" box, which only still shows if
+        # you re-enter an already-cleared anomaly later.
+        if st.session_state.cleared and not was_cleared_before:
+            unlocked_after = {
+                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+            }
+            newly_unlocked = [
+                chapters[cid]["name"] for cid in chapters
+                if not unlocked_before[cid] and unlocked_after[cid]
+            ]
+            st.session_state.debrief_anomaly_id = selected_id
+            st.session_state.debrief_newly_unlocked = newly_unlocked
+            st.session_state.view = "debrief"
 
         st.rerun()
 else:
@@ -297,6 +373,15 @@ else:
         # replaces the previous round's feedback -- but each message you
         # see is still yours to dismiss (or leave up) independently.
         new_messages = []
+
+        # MILESTONE 5: snapshot "before" state so we can tell, after this
+        # submission, whether the anomaly was JUST cleared (not already
+        # cleared from an earlier visit) and whether that newly unlocked
+        # any chapter -- needed to drive the one-time Debrief scene below.
+        was_cleared_before = st.session_state.cleared
+        unlocked_before = {
+            cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+        }
 
         if is_vacuum_box:
             # Grade the NUMBER with real physics, not string matching.
