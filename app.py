@@ -201,23 +201,30 @@ else:
     explanation = st.text_area("Explain your reasoning in one sentence:", key=explanation_key)
 
     # -----------------------------------------------------------------
-    # PHASE 4: the old Phase 1/2 dropdown is now a permanent SAFETY NET
-    # rather than the only option. By default this checkbox is OFF,
-    # which means the app calls the real GPT-4o mini AI (below) to judge
-    # the explanation. If you check this box, the app skips the real AI
-    # call entirely and goes back to using the dropdown's value instead
-    # -- handy if you're out of API budget or just want to test quickly.
+    # PHASE 4 (THIS MILESTONE: hidden by default): the old Phase 1/2
+    # dropdown is a dev/testing safety net, not something a player should
+    # see. It now only renders when the page URL includes "?debug=1" --
+    # e.g. http://localhost:8501/?debug=1 -- so you can still flip it on
+    # yourself to test offline without an API key, without it cluttering
+    # the normal experience. When hidden, use_mock/fake_verdict default
+    # to False/"resolved" so a real (or failed) AI call still behaves
+    # exactly as before.
     # -----------------------------------------------------------------
-    use_mock = st.checkbox(
-        "Use mock verdict instead of real AI (fallback if API fails or I'm low on budget)"
-    )
-    fake_verdict = st.selectbox(
-        "Mock AI verdict (used only when the checkbox above is checked, "
-        "or automatically if the real AI call fails):",
-        ["resolved", "thin", "wrong"],
-    )
+    debug_mode = st.query_params.get("debug") == "1"
+    if debug_mode:
+        use_mock = st.checkbox(
+            "Use mock verdict instead of real AI (fallback if API fails or I'm low on budget)"
+        )
+        fake_verdict = st.selectbox(
+            "Mock AI verdict (used only when the checkbox above is checked, "
+            "or automatically if the real AI call fails):",
+            ["resolved", "thin", "wrong"],
+        )
+    else:
+        use_mock = False
+        fake_verdict = "resolved"
 
-    if st.button("Submit"):
+    if st.button("ANALYZE", type="primary"):
         # Messages from THIS submission. We build a fresh list each time
         # rather than adding onto the old one, so a new Submit naturally
         # replaces the previous round's feedback -- but each message you

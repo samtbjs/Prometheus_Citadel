@@ -227,6 +227,141 @@ h3::before {
     border: 1px solid var(--panel-border) !important;
 }
 
+
+/* =======================================================================
+   THIS MILESTONE -- "in-world consoles" restyle of the raw form widgets.
+   Pure CSS on top of the SAME real Streamlit widgets (st.number_input,
+   st.text_area, st.button) -- nothing underneath is replaced. Uses the
+   same --accent (Chapter 1 cyan) and same two fonts already set up above.
+   ======================================================================= */
+
+/* ---- Force-entry console dial (vacuum_box's st.number_input) --------- */
+[data-testid="stNumberInput"] {
+    position: relative;
+    margin: 14px 6px;
+    padding: 6px;
+}
+[data-testid="stNumberInput"]::before,
+[data-testid="stNumberInput"]::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+[data-testid="stNumberInput"]::before {
+    top: 0; left: 0;
+    border-top: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+    filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+[data-testid="stNumberInput"]::after {
+    bottom: 0; right: 0;
+    border-bottom: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+    filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+.stNumberInput > div > div {
+    position: relative !important;
+    background: var(--panel-bg) !important;
+}
+.stNumberInput > div > div::before,
+.stNumberInput > div > div::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+}
+.stNumberInput > div > div::before {
+    top: -2px; right: -2px;
+    border-top: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+}
+.stNumberInput > div > div::after {
+    bottom: -2px; left: -2px;
+    border-bottom: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+}
+.stNumberInput input {
+    font-family: 'Share Tech Mono', monospace !important;
+    text-align: right !important;
+    color: var(--accent) !important;
+    background: transparent !important;
+    letter-spacing: 0.05em;
+    padding-right: 28px !important;
+    text-shadow: 0 0 8px var(--accent-glow);
+}
+.stNumberInput [data-baseweb="base-input"] {
+    position: relative;
+}
+.stNumberInput [data-baseweb="base-input"]::after {
+    content: "N";
+    position: absolute;
+    right: 34px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+/* ---- AI terminal for the reasoning field (st.text_area) --------------- */
+.stTextArea {
+    position: relative;
+    margin-top: 22px;
+}
+.stTextArea::before {
+    content: "\25B8 AI_TUTOR_LINK -- awaiting input";
+    position: absolute;
+    top: -20px;
+    left: 2px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+}
+.stTextArea > div > div {
+    border: 1px solid var(--panel-border) !important;
+    background: rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 0 22px rgba(45, 214, 224, 0.06) inset;
+}
+.stTextArea textarea {
+    font-family: 'Share Tech Mono', monospace !important;
+    color: var(--accent) !important;
+    background: transparent !important;
+    caret-color: var(--accent);
+}
+.stTextArea::after {
+    content: "\2588";
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    animation: prometheus-blink 1s step-end infinite;
+    pointer-events: none;
+}
+@keyframes prometheus-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+}
+
+/* ---- "ANALYZE" console action button ----------------------------------
+   Extends the existing .stButton hover-glow look above; the primary-typed
+   ANALYZE button gets a filled default state (not a new style family) so
+   it reads as THE console action. */
+button[kind="primary"] {
+    background: var(--accent) !important;
+    color: #04141a !important;
+    border: 1px solid var(--accent) !important;
+    box-shadow: 0 0 14px var(--accent-glow) !important;
+}
+button[kind="primary"]:hover {
+    box-shadow: 0 0 22px var(--accent-glow) !important;
+}
+
 </style>
 """
 
