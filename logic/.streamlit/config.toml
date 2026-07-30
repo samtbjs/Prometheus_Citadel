@@ -1,0 +1,20 @@
+# Phase 6 — base theme colors.
+#
+# Why this file exists: Streamlit's native widgets (checkbox ticks, the
+# selectbox focus outline, sliders, the default button states, etc.) are
+# rendered by Streamlit itself and are awkward/fragile to re-color purely
+# with CSS overrides. Setting the base theme here means those widgets
+# already match our cyan/dark palette out of the box, so ui/styles.py can
+# stay focused on the custom "diagnostic terminal" look (cards, glow,
+# fonts) instead of fighting every native widget's internals.
+#
+# This does NOT change any layout or logic -- it's the same mechanism
+# Streamlit uses for its own default light/dark themes.
+
+[theme]
+base = "dark"
+primaryColor = "#2dd6e0"
+backgroundColor = "#0b0f14"
+secondaryBackgroundColor = "#111823"
+textColor = "#e6f1f3"
+font = "sans serif"

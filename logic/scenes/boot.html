@@ -1,0 +1,91 @@
+<style>html,body{margin:0;padding:0;height:100%;background:#05080a;}</style>
+<div id="boot-root" style="position:relative;width:100%;height:100%;background:#05080a;overflow:hidden;font-family:'Share Tech Mono','Courier New',monospace;">
+  <canvas id="boot-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;"></canvas>
+  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:36px;pointer-events:none;">
+    <div id="boot-title" style="opacity:0;color:#2dd6e0;letter-spacing:6px;font-size:22px;font-weight:700;text-shadow:0 0 18px rgba(45,214,224,0.8);">PROMETHEUS LAB</div>
+    <div id="boot-sub" style="opacity:0;color:#8aa0aa;letter-spacing:2px;font-size:13px;margin-top:10px;">SYSTEMS INITIALIZING&hellip;</div>
+  </div>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('boot-root');
+  var canvas = document.getElementById('boot-canvas');
+  var w = root.clientWidth || 700, h = root.clientHeight || 420;
+
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x05080a, 0.035);
+
+  var camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  camera.position.set(0, 0, 6);
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  if (THREE.ACESFilmicToneMapping) renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+  scene.add(new THREE.AmbientLight(0x0a2226, 0.6));
+  var key = new THREE.DirectionalLight(0x445566, 0.4);
+  key.position.set(2, 3, 4);
+  scene.add(key);
+
+  var coreLight = new THREE.PointLight(0x2dd6e0, 0, 12);
+  coreLight.position.set(0, 0, 0);
+  scene.add(coreLight);
+
+  var core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1, 2),
+    new THREE.MeshStandardMaterial({
+      color: 0x0b2a2d, emissive: 0x2dd6e0, emissiveIntensity: 0,
+      metalness: 0.3, roughness: 0.35, wireframe: false
+    })
+  );
+  core.scale.setScalar(0.05);
+  scene.add(core);
+
+  var wire = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.35, 1),
+    new THREE.MeshBasicMaterial({ color: 0x2dd6e0, wireframe: true, transparent: true, opacity: 0 })
+  );
+  scene.add(wire);
+
+  function render() { renderer.render(scene, camera); }
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var tl = gsap.timeline({ onUpdate: render, onComplete: render });
+
+  if (reduceMotion) {
+    core.scale.setScalar(1);
+    core.material.emissiveIntensity = 1.4;
+    coreLight.intensity = 2.2;
+    wire.material.opacity = 0.5;
+    document.getElementById('boot-title').style.opacity = 1;
+    document.getElementById('boot-sub').style.opacity = 1;
+    render();
+  } else {
+    tl.to(core.scale, { x: 1, y: 1, z: 1, duration: 1.8, ease: 'power2.out' }, 0)
+      .to(core.material, { emissiveIntensity: 1.4, duration: 1.8, ease: 'power2.out' }, 0)
+      .to(coreLight, { intensity: 2.2, duration: 1.8, ease: 'power2.out' }, 0)
+      .to(wire.material, { opacity: 0.5, duration: 1.4, ease: 'power2.out' }, 0.4)
+      .to('#boot-title', { opacity: 1, duration: 0.6, ease: 'power1.out' }, 1.6)
+      .to('#boot-sub', { opacity: 1, duration: 0.6, ease: 'power1.out' }, 2.0);
+  }
+
+  (function loop() {
+    if (!reduceMotion) {
+      core.rotation.y += 0.004;
+      wire.rotation.y -= 0.002;
+      render();
+      requestAnimationFrame(loop);
+    }
+  })();
+
+  window.addEventListener('resize', function () {
+    var nw = root.clientWidth, nh = root.clientHeight;
+    camera.aspect = nw / nh;
+    camera.updateProjectionMatrix();
+    renderer.setSize(nw, nh);
+    render();
+  });
+})();
+</script>
