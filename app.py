@@ -18,6 +18,7 @@ from logic.streak_engine import (
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
+from ai.mastery import record_attempt_and_get_lesson, reset_mastery_state
 from ui.styles import inject_custom_css
 from ui.scene_viewer import (
     render_anomaly_scene,
@@ -400,6 +401,8 @@ for msg in list(st.session_state.feedback_messages):
 # thin answer is capturing a snare id in session state.
 if debug_mode:
     st.caption(f"DEBUG — last tagged snare: {st.session_state.get('last_snare_id')}")
+    _mastery_debug = st.session_state.progress.get("_mastery", {}).get(selected_id, {})
+    st.caption(f"DEBUG — mastery state: {_mastery_debug}")
 
 if st.session_state.cleared:
     # NOTE: no st.success() banner here on purpose -- the Debrief scene
@@ -412,6 +415,7 @@ if st.session_state.cleared:
         st.session_state.streak = 0
         st.session_state.cleared = False
 
+        reset_mastery_state(st.session_state.progress, selected_id)
         update_anomaly_progress(st.session_state.progress, selected_id, 0, 0, False)
         save_progress(st.session_state.progress)
         st.rerun()
@@ -567,6 +571,31 @@ else:
             "kind": verdict_kind,
             "text": f"**{verdict.upper()}** — {tutor_response}",
         })
+
+        # -------------------------------------------------------------
+        # PHASE 2 (this session): the mastery loop. On a "thin"/"wrong"
+        # verdict, teach the current strategy rung's lesson (advancing
+        # the rung after repeated misses, and deterministically
+        # revealing the answer once the ladder is exhausted -- never an
+        # open loop). On "resolved", this just resets the ladder for
+        # next time. Does NOT touch the streak-based clear condition
+        # above, which remains the only thing that decides "cleared".
+        # -------------------------------------------------------------
+        mastery_result = record_attempt_and_get_lesson(
+            progress=st.session_state.progress,
+            anomaly_id=selected_id,
+            question_prompt=q["prompt"],
+            expected_concept=q["answer"],
+            verdict=verdict,
+            snare_id=st.session_state.get("last_snare_id", "none"),
+            known_snares=q.get("known_snares", []),
+        )
+        if mastery_result is not None:
+            new_messages.append({
+                "id": str(uuid.uuid4()),
+                "kind": "info",
+                "text": f"🧭 **{mastery_result['strategy_label']}** — {mastery_result['text']}",
+            })
 
         st.session_state.feedback_messages = new_messages
         st.session_state.last_verdict = verdict
