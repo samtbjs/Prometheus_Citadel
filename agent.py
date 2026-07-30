@@ -71,9 +71,9 @@ def build_study_guides(result: dict, questions: list = None, seen_ids=None) -> l
 
 
 def direct_next(candidates: list, evidence: list, situation: str) -> dict | None:
-    """THE DIRECTOR: Gemma decides where the student goes next, and says why.
+    """THE DIRECTOR: GPT decides where the student goes next, and says why.
 
-    Everywhere else in this app Gemma reacts to one question. Here it shapes the
+    Everywhere else in this app GPT reacts to one question. Here it shapes the
     session: given what the run has actually shown, it picks the next fight.
 
     The split that makes this safe is the same one used throughout: plain code
@@ -88,7 +88,7 @@ def direct_next(candidates: list, evidence: list, situation: str) -> dict | None
     situation:  one line telling the model what kind of choice this is
     Returns the chosen candidate plus "why", or None when nothing is left.
     """
-    from gemma_client import ask_gemma, plainify
+    from gpt_client import ask_gpt, plainify
 
     if not candidates:
         return None
@@ -98,7 +98,7 @@ def direct_next(candidates: list, evidence: list, situation: str) -> dict | None
 
     roster = "\n".join(f"- {c['name']}: {c['focus']}" for c in candidates)
     try:
-        raw = ask_gemma(
+        raw = ask_gpt(
             "TASK: choose\n"
             "You are the director of a monster citadel, where every monster is one "
             "math snare a Grade 9 student falls for.\n"
@@ -135,15 +135,15 @@ def direct_next(candidates: list, evidence: list, situation: str) -> dict | None
 
 def teacher_report(result: dict, analysis: dict) -> str:
     """A report the PARENTS can act on. The FACTS (score, snares) are
-    deterministic; Gemma writes the interpretation and concrete interventions,
+    deterministic; GPT writes the interpretation and concrete interventions,
     grounded in those facts."""
-    from gemma_client import ask_gemma, plainify, format_teacher_report
+    from gpt_client import ask_gpt, plainify, format_teacher_report
 
     patterns = "; ".join(f"{p['name']} (missed {p['count']})"
                          for p in analysis["patterns"]) or "none identified"
     focus = analysis["priority"]["name"] if analysis["priority"] else "n/a"
 
-    narrative = plainify(ask_gemma(
+    narrative = plainify(ask_gpt(
         "TASK: parent\n"
         "You are writing a brief, warm report for the PARENTS of a Grade 9 student, "
         "using ONLY the facts below. Do not invent numbers or facts.\n"

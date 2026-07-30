@@ -17,7 +17,7 @@ Design rules (same as the rest of the app):
 """
 from __future__ import annotations
 
-from gemma_client import ask_gemma, plainify
+from gpt_client import ask_gpt, plainify
 
 RELIC_NAME_MAX_WORDS = 5
 MEMORY_LINE_MAX_WORDS = 25
@@ -44,7 +44,7 @@ def forge_relic(player_name, monster_name, trick_name, attempts, strategies_trie
     }
     try:
         strategies = ", ".join(strategies_tried) if strategies_tried else "sheer persistence"
-        raw = ask_gemma(
+        raw = ask_gpt(
             f"TASK: relic\n"
             f"A player named {player_name} just defeated the monster {monster_name} "
             f"by mastering this exact math skill: {trick_name}.\n"
@@ -148,7 +148,7 @@ def battle_memory_line(player_name, monster_name, memory_facts):
         if not fact_lines:
             fact_lines.append("- This is the player's very first battle.")
 
-        raw = ask_gemma(
+        raw = ask_gpt(
             f"TASK: taunt\n"
             f"You are {monster_name}, a playful math-game monster, greeting the "
             f"player {player_name} at the start of a battle.\n"
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     import sys
 
     mod = sys.modules[__name__]
-    real_ask = mod.ask_gemma
+    real_ask = mod.ask_gpt
     facts = {"mastered_tricks": ["adding fractions straight across"],
              "defeated_monsters": ["Equazor"],
              "last_score": "3 of 5",
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     def _boom(prompt, max_new_tokens=600):
         raise RuntimeError("model down")
 
-    mod.ask_gemma = _boom
+    mod.ask_gpt = _boom
     relic = forge_relic("Amina", "Fractis", "adding fractions straight across",
                         3, ["Direct correction", "Visual walkthrough"])
     assert relic["name"] == "Fractis's Broken Fang", relic
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     assert "Amina" in line, line
 
     # ---- fallback paths: the model returns garbage ----
-    mod.ask_gemma = lambda prompt, max_new_tokens=600: "hmm, interesting question!"
+    mod.ask_gpt = lambda prompt, max_new_tokens=600: "hmm, interesting question!"
     relic = forge_relic("Amina", "Fractis", "adding fractions straight across", 3, [])
     assert relic["name"] == "Fractis's Broken Fang", relic
     line = battle_memory_line("Bee", "Fractis", facts)     # no player name in output
@@ -227,7 +227,7 @@ if __name__ == "__main__":
                 "POWER: When fractions gather, Amina, this shard hums until "
                 "you give them common ground first.")
 
-    mod.ask_gemma = _fake_relic
+    mod.ask_gpt = _fake_relic
     relic = forge_relic("Amina", "Fractis", "adding fractions straight across",
                         3, ["Direct correction"])
     assert relic["name"] == "Denominator Shard", relic
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     assert len(relic["name"].split()) <= RELIC_NAME_MAX_WORDS
 
     # relic name gets truncated to 5 words, LaTeX gets plainified
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "NAME: The Ancient Golden Shard of Endless Denominators\n"
         "POWER: You tamed $\\frac{2}{3}$ forever, Amina")
     relic = forge_relic("Amina", "Fractis", "adding fractions straight across", 3, [])
@@ -248,17 +248,17 @@ if __name__ == "__main__":
     def _fake_line(prompt, max_new_tokens=600):
         return '"So, Amina, slayer of Equazor... 3 of 5 last time? My waters are less forgiving."'
 
-    mod.ask_gemma = _fake_line
+    mod.ask_gpt = _fake_line
     line = battle_memory_line("Amina", "Statiq", facts)
     assert "Amina" in line and "Equazor" in line, line
     assert len(line.split()) <= MEMORY_LINE_MAX_WORDS, line
     assert not line.startswith('"') and not line.endswith('"'), line
 
     # over-long output gets truncated to the word cap
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Amina " + "word " * 40)
     line = battle_memory_line("Amina", "Statiq", facts)
     assert len(line.split()) <= MEMORY_LINE_MAX_WORDS, line
 
-    mod.ask_gemma = real_ask
+    mod.ask_gpt = real_ask
     print("rewards.py smoke test: all assertions passed")

@@ -1,4 +1,4 @@
-# PROMETHEUS LAB - deck script
+# PROMETHEUS CITADEL - deck script
 
 16 slides. Slide-by-slide: what is said, what is on screen, and why the slide is in the
 deck.
@@ -21,10 +21,10 @@ snared, a snare is beaten.
 
 ---
 
-## Slide 1 - Prometheus Lab runs a Grade 9 maths tutor on one offline laptop
+## Slide 1 - Prometheus Citadel runs a Grade 9 maths tutor on one offline laptop
 
 **Says:**
-PROMETHEUS LAB
+PROMETHEUS CITADEL
 
 An autonomous Grade 9 EQAO mathematics tutor, wrapped in a three.js monster game.
 

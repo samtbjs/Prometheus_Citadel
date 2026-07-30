@@ -1,4 +1,4 @@
-# Prometheus Lab — screen recording script
+# Prometheus Citadel — screen recording script
 
 A shot-by-shot script for a screen recording. Roughly **2 minutes 45 seconds** at a
 comfortable pace. Cut marks are noted if you need to land under 90 seconds.

@@ -11,7 +11,7 @@ Two rules decide what goes on the paper, in this order:
   1. BANK FIRST. Verified items tagged with the trick, then items from the same
      strand. They carry a ground-truth answer key AND a worked solution, so the
      parent is never left arguing with the paper about who is right.
-  2. GENERATION LAST, AND ONLY UNDER AUDIT. If the bank runs dry, Gemma writes
+  2. GENERATION LAST, AND ONLY UNDER AUDIT. If the bank runs dry, GPT writes
      the remainder one at a time, and each one must survive a blind self-solve
      (mastery._self_check applied to paper): the model solves its own question
      WITHOUT seeing the key it just wrote, and the question is thrown away
@@ -27,7 +27,7 @@ import html
 import json
 import re
 
-from gemma_client import ask_gemma, plainify
+from gpt_client import ask_gpt, plainify
 from selection import on_idea_pool
 
 ATTEMPTS_PER_ITEM = 3    # tries (write + audit) before we give up on one slot
@@ -183,7 +183,7 @@ def similar_to(seed_question: str, snare_name: str, strand: str = "",
     for _ in range(ATTEMPTS_PER_ITEM + 1):
         if not budget.spend():
             return None
-        raw = ask_gemma(
+        raw = ask_gpt(
             f"TASK: practice\n"
             f"TRICK: {snare_name}\n"
             f"A Grade 9 student just got this question wrong:\n"
@@ -260,7 +260,7 @@ def _one_generated(trick_name: str, strand: str, seed: str, sofar: list,
     for _ in range(ATTEMPTS_PER_ITEM):
         if not budget.spend():
             return None
-        raw = ask_gemma(
+        raw = ask_gpt(
             f"TASK: practice\n"
             f"TRICK: {trick_name}\n"
             f"Write ONE new Grade 9 {strand} multiple-choice question, in English, "
@@ -312,14 +312,14 @@ def _one_generated(trick_name: str, strand: str, seed: str, sofar: list,
 
 def _blind_solve_agrees(question: str, opts: dict, key: str,
                         budget: _Budget) -> bool:
-    """The audit. Gemma solves the question it just wrote WITHOUT being shown
+    """The audit. GPT solves the question it just wrote WITHOUT being shown
     which option it marked correct, and the question only survives if the two
     answers match. Anything else — a disagreement, an unreadable reply, an
     exhausted budget — fails closed and the question is discarded."""
     if not budget.spend():
         return False
     listing = "\n".join(f"{k}) {v}" for k, v in sorted(opts.items()))
-    verdict = ask_gemma(
+    verdict = ask_gpt(
         f"TASK: solve\n"
         f"Solve this and reply with ONLY the letter of the correct option.\n"
         f"{question}\n{listing}",

@@ -5,13 +5,13 @@ Splits cleanly into two kinds of content:
   * FACTS we already have (no AI needed): the snare name, the correct
     answer, and the worked solution from our verified bank.
   * GENERATED content (Prometheus Citadel's job): a friendly personalized explanation and a
-    fresh follow-up practice question. These go through ask_gemma().
+    fresh follow-up practice question. These go through ask_gpt().
 
 The `strategy` argument is how the AGENT adapts: if a plain explanation doesn't
 land, it re-calls with a different strategy (see agent.py / the blueprint).
 """
 from __future__ import annotations
-from gemma_client import ask_gemma, plainify
+from gpt_client import ask_gpt, plainify
 from selection import next_on_idea
 
 STRATEGIES = ["explanation", "worked_example", "visual", "analogy"]
@@ -51,7 +51,7 @@ def pick_practice(item: dict, misc: dict, questions: list, used_ids: set) -> dic
     # strand: slope and the distributive property are both Algebra, and a
     # student who was just caught by one is not helped by the other.
     #
-    # A written question here is a full multiple-choice item that Gemma has
+    # A written question here is a full multiple-choice item that GPT has
     # solved again blind and agreed with, so "now you try" is still something
     # the student can answer and be marked on.
     from practice_sheet import generate_audited
@@ -59,7 +59,7 @@ def pick_practice(item: dict, misc: dict, questions: list, used_ids: set) -> dic
     if made:
         return {**made, "id": f"GEN-{item['id']}"}
 
-    text = plainify(ask_gemma(
+    text = plainify(ask_gpt(
         f"TASK: practice\n"
         f"TRICK: {misc['name']}\n"
         f"Write ONE fresh Grade 9 practice question, in English, working the "
@@ -84,7 +84,7 @@ def hint(practice: dict, misc: dict, level: int) -> str:
              "the first concrete step of the solution, but not the final answer")
     grounding = (f"The verified solution is: {practice.get('solution', '')}\n"
                  if practice.get("solution") else "")
-    return plainify(ask_gemma(
+    return plainify(ask_gpt(
         f"TASK: explain\n"
         f"TRICK: {misc['name']}\n"
         f"A Grade 9 student is attempting: {practice['question']}\n"
@@ -102,7 +102,7 @@ def study_guide(item: dict, chosen_label: str, strategy: str = "explanation",
     correct = next(o for o in item["options"] if o["is_correct"])
     used_ids = used_ids if used_ids is not None else set()
 
-    # Grounding rule: Gemma never recomputes the math. It receives the verified
+    # Grounding rule: GPT never recomputes the math. It receives the verified
     # answer and worked solution and explains WHY the student's method fails —
     # we caught the small model inventing wrong arithmetic when asked to redo it.
     explain_prompt = (
@@ -127,7 +127,7 @@ def study_guide(item: dict, chosen_label: str, strategy: str = "explanation",
         "correct": correct["text"],
         "trick": misc,
         "strategy": strategy,
-        "explanation": plainify(ask_gemma(explain_prompt)),  # Gemma, LaTeX stripped
+        "explanation": plainify(ask_gpt(explain_prompt)),  # GPT, LaTeX stripped
         "worked_solution": item.get("solution", ""),    # real, from the bank
         "solution": item.get("solution", ""),           # same, under the bank's key
         "traps": item.get("traps", []),                 # wrong answers, by their text

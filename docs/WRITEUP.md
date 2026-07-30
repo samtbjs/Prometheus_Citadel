@@ -1,4 +1,4 @@
-# Submission: Prometheus Lab
+# Submission: Prometheus Citadel
 
 **Team:** Gokulakrishnan, Padmanabha, Taha, Naimah, Amarah
 **Event:** Build with AI - Gemma Hackathon, GDG Windsor · **Track:** Edge / On-Device

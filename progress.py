@@ -11,7 +11,7 @@ never recomputes the maths, and it never owns a figure.
 
 Three things follow from that split:
 
-  * The prose is checked before it ships. Gemma is not allowed to state a
+  * The prose is checked before it ships. GPT is not allowed to state a
     figure at all — the counts are printed by code right beside its words — so
     any number in the reply, in digits or spelled out, means the reply is
     discarded and a deterministic sentence, built from the same facts, goes out
@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import re
 
-from gemma_client import ask_gemma, gemma_available, plainify
+from gpt_client import ask_gpt, gpt_available, plainify
 
 # The speed-drill lanes, in the parents' words rather than the code's.
 # Unknown lanes fall through to the raw key so a new drill still reports.
@@ -56,7 +56,7 @@ LETTER_KIND_ORDER = ["quiz", "mastery", "escalation", "report"]
 # notes count and reads as perfectly true. Pairing a number to the right noun
 # is exactly the judgement a 1b model gets wrong, and we watched it do so. So
 # the rule is absolute and needs no judgement to enforce — every count on this
-# page is printed by code beside Gemma's words, and Gemma writes only about
+# page is printed by code beside GPT's words, and GPT writes only about
 # what they mean. Any digit or spelled-out number in the reply means the reply
 # is discarded.
 _SPELLED_NUMBERS = re.compile(
@@ -271,7 +271,7 @@ def _build_headline(snares, letter_facts, drills, relics, trend) -> str:
 
 # --------------------------------------------------------------- the facts
 def _facts_lines(snares, letter_facts, drills, relics, trend, last_score) -> list:
-    """The complete, computed record handed to Gemma. Nothing else is."""
+    """The complete, computed record handed to GPT. Nothing else is."""
     lines = []
     if snares:
         lines.append(f"Snares beaten so far: {len(snares)} "
@@ -416,7 +416,7 @@ def _house_language(text: str) -> str:
 def _ask_for_reading(facts_text: str) -> str:
     """The ONE model call in this module. It receives the finished facts and
     writes prose about them — it is never asked for a figure or a trend."""
-    raw = ask_gemma(
+    raw = ask_gpt(
         "TASK: parent\n"
         "A Grade 9 student is working through a maths game with an on-device "
         "tutor. In this game a 'snare' is a wrong idea that feels right, and "
@@ -455,7 +455,7 @@ def summarise(letters: list, mastered_names: list, skirmish_log: list,
     Everything numeric is computed here from the session's own records:
     the snares beaten and their names, how many notes went home and what each
     was about, the best and latest speed-drill score per lane and whether it
-    is improving, and the relics earned. Gemma is then handed those finished
+    is improving, and the relics earned. GPT is then handed those finished
     facts and writes 'reading' — two or three sentences of interpretation for
     mum and dad. It is asked to work out no figure and is not allowed to state
     one; anything it writes that names a number is discarded unread.
@@ -465,7 +465,7 @@ def summarise(letters: list, mastered_names: list, skirmish_log: list,
         chart    — {"Best score": {lane: n}, "Latest score": {lane: n}}, ready
                    for st.bar_chart; empty dict when no drills have been fought
         headline — one computed line summing the session up
-        reading  — Gemma's prose, or a deterministic sentence built from the
+        reading  — GPT's prose, or a deterministic sentence built from the
                    same facts if the model is unavailable or oversteps
     """
     snares = _dedupe(mastered_names)
@@ -484,7 +484,7 @@ def summarise(letters: list, mastered_names: list, skirmish_log: list,
     fallback = _fallback_reading(snares, letter_facts, drills, relic_facts, trend)
 
     reading = ""
-    if gemma_available():
+    if gpt_available():
         try:
             reading = _ask_for_reading(facts_text)
         except Exception:      # a model hiccup must never break the page
@@ -514,7 +514,7 @@ if __name__ == "__main__":
     import sys
 
     mod = sys.modules[__name__]
-    real_ask, real_available = mod.ask_gemma, mod.gemma_available
+    real_ask, real_available = mod.ask_gpt, mod.gpt_available
 
     LETTERS = [
         {"n": 1, "title": "After the quiz — adding fractions straight across",
@@ -534,7 +534,7 @@ if __name__ == "__main__":
                "power": "Common ground first, always.", "monster": "Fractis"}]
 
     # ---- the model is unavailable: the page still gets a full summary ----
-    mod.gemma_available = lambda: False
+    mod.gpt_available = lambda: False
     out = summarise(LETTERS, MASTERED, SKIRMISH, RELICS, last_score="3 of 5")
     print(json.dumps(out, indent=2))
     assert out["headline"].startswith("1 snare beaten"), out["headline"]
@@ -547,47 +547,47 @@ if __name__ == "__main__":
     def _boom(prompt, max_new_tokens=600):
         raise RuntimeError("model down")
 
-    mod.gemma_available = lambda: True
-    mod.ask_gemma = _boom
+    mod.gpt_available = lambda: True
+    mod.ask_gpt = _boom
     assert summarise(LETTERS, MASTERED, SKIRMISH, RELICS)["reading"] == \
         summarise(LETTERS, MASTERED, SKIRMISH, RELICS, "3 of 5")["reading"]
 
     # ---- the model invents a number: the reading is refused ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Your child has beaten 7 snares this week and scored 41 on the drills.")
     refused = summarise(LETTERS, MASTERED, SKIRMISH, RELICS, "3 of 5")["reading"]
     assert "7 snares" not in refused, refused
     assert refused.startswith("So far"), refused
 
     # ---- warm filler that names none of the facts: also refused ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Your child is doing well and making good progress. Keep encouraging them.")
     vague = summarise(LETTERS, MASTERED, SKIRMISH, RELICS, "3 of 5")["reading"]
     assert vague.startswith("So far"), vague
 
     # ---- a count spelled out is refused too: it cannot be checked ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Your child has beaten three snares with adding fractions straight "
         "across, and earned a relic. Keep going.")
     spelled = summarise(LETTERS, MASTERED, SKIRMISH, RELICS, "3 of 5")["reading"]
     assert "three snares" not in spelled, spelled
 
-    # ---- even a TRUE figure is refused: code prints the counts, not Gemma ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    # ---- even a TRUE figure is refused: code prints the counts, not GPT ----
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Your child has beaten 1 snare, adding fractions straight across.")
     true_but_numeric = summarise(LETTERS, MASTERED, SKIRMISH, RELICS,
                                  "3 of 5")["reading"]
     assert true_but_numeric.startswith("So far"), true_but_numeric
 
     # ---- the model claims a trend the record does not show: refused ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         "Your child is improving quickly on the doubling and halving drill.")
     ONE_RUN = [{"lane": "doubles", "score": 9, "streak": 4, "misses": []}]
     trendy = summarise(LETTERS, MASTERED, ONE_RUN, RELICS, "3 of 5")["reading"]
     assert "improving quickly" not in trendy, trendy
 
     # ---- the model behaves: its prose is used, and cleaned ----
-    mod.ask_gemma = lambda p, max_new_tokens=600: (
+    mod.ask_gpt = lambda p, max_new_tokens=600: (
         '"Good news: adding fractions straight across is behind them now, and '
         'the doubling and halving drill is moving the right way. The note '
         'asking for your help is still open — it flags a learning gap around '
@@ -602,5 +602,5 @@ if __name__ == "__main__":
     assert empty["chart"] == {} and empty["rows"], empty
     assert empty["headline"].startswith("Nothing to show yet"), empty["headline"]
 
-    mod.ask_gemma, mod.gemma_available = real_ask, real_available
+    mod.ask_gpt, mod.gpt_available = real_ask, real_available
     print("progress.py smoke test: all assertions passed")

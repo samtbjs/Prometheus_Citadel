@@ -21,7 +21,7 @@ import rewards
 import practice_sheet
 import progress
 import onboarding
-from gemma_client import plainify
+from gpt_client import plainify
 
 QUESTIONS = json.loads((Path(__file__).parent / "data" / "questions.json").read_text())
 STRANDS = sorted({q["strand"] for q in QUESTIONS})
@@ -1742,7 +1742,7 @@ def parents_stage():
         st.download_button("Download every note as one file", bundle,
                            file_name="letters_home.md", key="dl_letters")
 
-        # ---- how the run is going: code counts, Gemma interprets ----
+        # ---- how the run is going: code counts, GPT interprets ----
         # Keyed on the record itself: a summary cached by name alone went on
         # showing zeros after a drill had been fought and a relic won.
         _sig = (len(load_letters()), len(st.session_state.get("skirmish_log", [])),
@@ -2789,7 +2789,7 @@ html,body{margin:0;background:#050308;overflow:hidden;font-family:'Trebuchet MS'
 __VENDOR__
 <script>
 window.addEventListener('load', function(){
-  // Gemma's whisper sits above this arena and the retreat below it, so the
+  // GPT's whisper sits above this arena and the retreat below it, so the
   // drill takes what is left of the screen - a 90 second clock must not need
   // scrolling to see the question.
   GWB.holdFrame('auto', 430);
@@ -3156,12 +3156,12 @@ def skirmish_stage():
     lt = _LIEUTENANTS[lane]
     _coach_relay()
     full_bleed()
-    # Gemma whispers the mental strategy before the war (cached per lane)
+    # GPT whispers the mental strategy before the war (cached per lane)
     wkey = f"whisper_{lane}"
     if wkey not in st.session_state:
         try:
-            from gemma_client import ask_gemma, plainify
-            st.session_state[wkey] = plainify(ask_gemma(
+            from gpt_client import ask_gpt, plainify
+            st.session_state[wkey] = plainify(ask_gpt(
                 "TASK: explain\nIn TWO short sentences, teach a Grade 9 student the "
                 f"mental-math snare of {lt['whisper']} Plain text, encouraging, no examples "
                 "longer than one, address them as a warrior sharpening a blade.",
@@ -3206,8 +3206,8 @@ def coach_stage():
         st.session_state.pop("lt_pick", None)   # new evidence, fresh decision
     if ck not in st.session_state:
         try:
-            from gemma_client import ask_gemma, plainify
-            st.session_state[ck] = plainify(ask_gemma(
+            from gpt_client import ask_gpt, plainify
+            st.session_state[ck] = plainify(ask_gpt(
                 "TASK: coach\nYou are a sharp, kind mental-math coach. A Grade 9 student "
                 f"named {st.session_state.get('player_name', 'Challenger')} just fought a "
                 f"90-second speed battle on the skill: {lane}. Score {d.get('score')} correct, "
@@ -3395,13 +3395,13 @@ def boss_stage():
          "quiz record</strong>: this is speed, not curriculum. Beat his timer and "
          "he gives your basics back. Lose, and his lieutenants below are how you "
          "buy them back - each one drills a single mental shortcut until it is "
-         "automatic, then Gemma reads your misses and coaches you before the rematch.")
+         "automatic, then GPT reads your misses and coaches you before the rematch.")
     st.markdown('<div style="text-align:center;letter-spacing:.14em;font-size:.72rem;'
                 'color:#8a86a8;font-weight:700;margin-top:6px">'
                 'HIS TIMER PUNISHES SLOW ARITHMETIC. HIS LIEUTENANTS ARE WHERE YOU GET FAST</div>',
                 unsafe_allow_html=True)
 
-    # Gemma directs the training: which drill is worth the student's time,
+    # GPT directs the training: which drill is worth the student's time,
     # judged on the skirmishes they have actually fought.
     if "lt_pick" not in st.session_state:
         log = st.session_state.get("skirmish_log", [])
@@ -3449,7 +3449,7 @@ def boss_stage():
 
 
 def _encounter_html(mon, name):
-    # .replace, not .format: one line is Gemma-written, and stray braces in
+    # .replace, not .format: one line is GPT-written, and stray braces in
     # model output would crash str.format for the whole encounter
     lines = [ln.replace("{name}", name) for ln in mon.get("lines", [mon.get("taunt", "...")])]
     return (_ENCOUNTER_TEMPLATE
@@ -3877,7 +3877,7 @@ def results():
                         with st.expander("See this one worked out"):
                             st.markdown(solution_md(p))
 
-    # Gemma directs the hunt: which monster is worth facing next, and why
+    # GPT directs the hunt: which monster is worth facing next, and why
     if st.session_state.get("adventure"):
         cleared = st.session_state.get("defeated_strands", set())
         open_hunts = [{"key": s, "name": mo["monster"],
@@ -4037,7 +4037,7 @@ def mastery_stage():
     fb = st.session_state.get("mfeedback")
 
     if fb and fb.get("reaction"):
-        # Gemma read the student's own typed words and answers them directly
+        # GPT read the student's own typed words and answers them directly
         note("The citadel heard you", esc_note(fb["reaction"]))
     if fb and fb.get("rationale"):
         # explainable AI: every decision shows its evidence-based "why"

@@ -1,4 +1,4 @@
-# PROMETHEUS LAB — Full Project Handoff
+# PROMETHEUS CITADEL — Full Project Handoff
 Last updated: July 24, 2026. Written so any Claude session (or teammate) can pick up instantly.
 
 ## What we are building
@@ -19,7 +19,7 @@ row with sound reasoning) or hands off to mum and dad with an actionable Gemma-w
 report. Gemma then directs where the student goes next. Every agent decision shows an
 evidence-based "why" (explainable AI).
 
-PROMETHEUS LAB is the front door; simple mode (the plain quiz app, same brain) is one click
+PROMETHEUS CITADEL is the front door; simple mode (the plain quiz app, same brain) is one click
 away from the intro screen.
 
 ## Where everything is

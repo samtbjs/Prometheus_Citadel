@@ -23,7 +23,7 @@ bottoms. Tidy, symmetric, and wrong. Marking it wrong teaches nothing, because t
 student who wrote 3/7 already believed 3/7. That is not carelessness; it is a rule,
 applied faithfully. It is just the wrong rule.
 
-We built **Prometheus Lab**: an EQAO tutor wrapped in a monster game that names the
+We built **Prometheus Citadel**: an EQAO tutor wrapped in a monster game that names the
 specific wrong idea behind a wrong answer, teaches until that idea stops working, and
 writes home to a parent — all on one laptop, with nothing leaving the machine. Five
 monsters guard the five strands EQAO assesses. Each one embodies a way of being wrong

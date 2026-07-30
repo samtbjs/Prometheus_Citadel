@@ -20,7 +20,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from gemma_client import ask_gemma, plainify
+from gpt_client import ask_gpt, plainify
 from selection import next_on_idea
 
 # ---- the strategy ladder: each entry is a different way to teach ----
@@ -42,7 +42,7 @@ STRATEGY_LADDER = [
 
 MASTERY_BAR = 2      # consecutive correct answers to declare mastery
 MAX_ATTEMPTS = 4     # check cycles before we hand off to a human
-MAX_GEMMA_CALLS = 12 # absolute budget, belt and suspenders
+MAX_GPT_CALLS = 12 # absolute budget, belt and suspenders
 
 MASTERED, ESCALATED, IN_PROGRESS = "MASTERED", "ESCALATED", "IN_PROGRESS"
 
@@ -61,7 +61,7 @@ class MasterySession:
     strategy_index: int = 0
     attempts: int = 0
     consecutive_correct: int = 0
-    gemma_calls: int = 0
+    gpt_calls: int = 0
     state: str = IN_PROGRESS
     escalation_reason: str = ""
     history: list = field(default_factory=list)   # dicts: lesson / check / answer rows
@@ -73,12 +73,12 @@ class MasterySession:
 
 # ------------------------------------------------------------------ TEACH
 def teach(session: MasterySession) -> str:
-    """One strategy-specific lesson from Gemma."""
+    """One strategy-specific lesson from GPT."""
     name, recipe = STRATEGY_LADDER[session.strategy_index]
-    session.gemma_calls += 1
+    session.gpt_calls += 1
     grounding = (f"The verified solution to that question is: {session.seed_solution}\n"
                  if session.seed_solution else "")
-    lesson = ask_gemma(
+    lesson = ask_gpt(
         f"TASK: explain\n"
         f"TRICK: {session.trick_name}\n"
         f"You are tutoring a Grade 9 student who keeps making this mistake: "
@@ -104,7 +104,7 @@ def next_check(session: MasterySession, questions: list) -> dict | None:
     """A FRESH check question on the SAME idea, never merely the same strand.
 
     Verified bank items first, because their answer key is ground truth. When
-    the bank has nothing left on this idea, Gemma writes one under audit. It
+    the bank has nothing left on this idea, GPT writes one under audit. It
     does not reach for a neighbouring topic to fill the slot: checking whether
     a student has beaten one idea by asking about a different one tells nobody
     anything."""
@@ -128,7 +128,7 @@ def next_check(session: MasterySession, questions: list) -> dict | None:
                      session.trick_name, session.topic)
     if q:
         return take(q, "bank")
-    # No verified question left on this idea. Gemma writes one, and it only
+    # No verified question left on this idea. GPT writes one, and it only
     # reaches the student if it declares the right target AND solves itself
     # blind. If it cannot, the loop ends and says so - which is better than
     # checking mastery of one idea with a question about another.
@@ -136,15 +136,15 @@ def next_check(session: MasterySession, questions: list) -> dict | None:
 
 
 def _generated_check(session: MasterySession) -> dict | None:
-    """Gemma-generated multiple-choice check question, validated before use."""
+    """GPT-generated multiple-choice check question, validated before use."""
     # Three tries, not one retry: a question that fails its own blind re-solve is
     # thrown away, which is right, but two attempts was often not enough to land
     # a keeper and the loop then fell back to a question on a different idea.
     # The call budget below still stops this from running away.
     for _ in range(3):
-        if session.gemma_calls >= MAX_GEMMA_CALLS:
+        if session.gpt_calls >= MAX_GPT_CALLS:
             return None
-        session.gemma_calls += 1
+        session.gpt_calls += 1
         # Aim: the follow-up has to work the SAME idea. Naming the failure mode
         # explicitly beats asking politely for relevance - a model told only
         # "test the same skill" will happily wander to another topic in the
@@ -158,7 +158,7 @@ def _generated_check(session: MasterySession) -> dict | None:
         picked = (f"When they met this idea they chose '{session.seed_chosen}', "
                   f"when the answer was '{session.seed_correct}'.\n"
                   if session.seed_chosen else "")
-        raw = ask_gemma(
+        raw = ask_gpt(
             f"TASK: practice\n"
             f"TRICK: {session.trick_name}\n"
             f"You are writing ONE follow-up question for a Grade 9 student in a "
@@ -226,16 +226,16 @@ def _targets_the_snare(session: MasterySession, data: dict) -> bool:
 
 
 def _self_check(session: MasterySession, data: dict) -> bool:
-    """Before a generated question is shown, Gemma must solve it BLIND (without
+    """Before a generated question is shown, GPT must solve it BLIND (without
     seeing which option it marked correct) and agree with its own answer key.
     A question that fails its own audit is discarded — we caught the small
     model marking wrong keys, and this check turns that failure mode into a
     silent retry instead of a student-facing bug."""
-    if session.gemma_calls >= MAX_GEMMA_CALLS:
+    if session.gpt_calls >= MAX_GPT_CALLS:
         return False
     opts = "\n".join(f"{k}) {v}" for k, v in sorted(data["options"].items()))
-    session.gemma_calls += 1
-    verdict = ask_gemma(
+    session.gpt_calls += 1
+    verdict = ask_gpt(
         f"TASK: solve\n"
         f"Solve this and reply with ONLY the letter of the correct option.\n"
         f"{data['question']}\n{opts}"
@@ -269,7 +269,7 @@ def _looks_like_reasoning(text: str) -> bool:
 
 def _grade_reasoning(session: MasterySession, check: dict, chosen_label: str,
                      explanation: str) -> str:
-    """Gemma as a CONSTRAINED grader: classify the student's typed reasoning
+    """GPT as a CONSTRAINED grader: classify the student's typed reasoning
     into a closed label set. It compares against the known answer — it never
     recomputes the math open-endedly. Fail-open: any parse problem returns
     RESOLVED so a model hiccup can never hurt the student."""
@@ -283,8 +283,8 @@ def _grade_reasoning(session: MasterySession, check: dict, chosen_label: str,
         return "SHALLOW"
 
     correct_opt = next(o["text"] for o in check["options"] if o["is_correct"])
-    session.gemma_calls += 1
-    raw = ask_gemma(
+    session.gpt_calls += 1
+    raw = ask_gpt(
         f"TASK: grade\n"
         f"TRICK: {session.trick_name}\n"
         f"A Grade 9 student answered this question: {check['question']}\n"
@@ -306,19 +306,19 @@ def _grade_reasoning(session: MasterySession, check: dict, chosen_label: str,
 
 def _reaction(session: MasterySession, explanation: str, correct: bool,
               label: str) -> str:
-    """One or two lines from Gemma reacting DIRECTLY to the student's own typed
+    """One or two lines from GPT reacting DIRECTLY to the student's own typed
     words, in the voice of the citadel. The grader (above) classifies; this is
     where the student feels heard — real reasoning gets a real acknowledgement,
     and joking or off-topic text gets a playful callout plus a warning that the
     monsters ahead only fall to genuine reasoning."""
-    if not explanation.strip() or session.gemma_calls >= MAX_GEMMA_CALLS:
+    if not explanation.strip() or session.gpt_calls >= MAX_GPT_CALLS:
         return ""
-    session.gemma_calls += 1
+    session.gpt_calls += 1
     quality = {"RESOLVED": "solid", "SHALLOW": "thin or missing",
                "SAME_ERROR": "still caught in the snare"}.get(label, "solid")
     verdict = (f"their answer was correct and their reasoning was judged {quality}"
                if correct else "their answer was wrong")
-    raw = ask_gemma(
+    raw = ask_gpt(
         f"TASK: react\n"
         f"You are the voice of a monster citadel in a math game - dry wit, a "
         f"little theatrical, never mean, and you take real effort seriously.\n"
@@ -335,7 +335,7 @@ def _reaction(session: MasterySession, explanation: str, correct: bool,
 
 
 def _choose_strategy(session: MasterySession, explanation: str) -> str:
-    """Gemma DECIDES the next teaching move: given the student's own words, it
+    """GPT DECIDES the next teaching move: given the student's own words, it
     picks the most promising remaining strategy and says why. Deterministic
     fallback (next rung of the ladder) if the reply doesn't parse."""
     remaining = STRATEGY_LADDER[session.strategy_index + 1:]
@@ -344,8 +344,8 @@ def _choose_strategy(session: MasterySession, explanation: str) -> str:
         return fallback_reason
     if len(remaining) > 1 and explanation:
         names = ", ".join(name for name, _ in remaining)
-        session.gemma_calls += 1
-        raw = ask_gemma(
+        session.gpt_calls += 1
+        raw = ask_gpt(
             f"TASK: choose\n"
             f"TRICK: {session.trick_name}\n"
             f"A student still has this snare after a lesson. Their own "
@@ -371,7 +371,7 @@ def submit_answer(session: MasterySession, check: dict, chosen_label: str,
                   explanation: str = "") -> dict:
     """Grade the check answer, judge the reasoning, decide what happens next.
 
-    Multiple-choice correctness is deterministic (bank ground truth). Gemma
+    Multiple-choice correctness is deterministic (bank ground truth). GPT
     grades the typed reasoning and chooses the next strategy; hard caps and
     final state transitions stay in plain code so the loop always terminates.
 
@@ -409,7 +409,7 @@ def submit_answer(session: MasterySession, check: dict, chosen_label: str,
     if session.state == IN_PROGRESS and session.attempts >= MAX_ATTEMPTS:
         session.state = ESCALATED
         session.escalation_reason = f"attempt cap reached ({MAX_ATTEMPTS} check questions)"
-    if session.state == IN_PROGRESS and session.gemma_calls >= MAX_GEMMA_CALLS:
+    if session.state == IN_PROGRESS and session.gpt_calls >= MAX_GPT_CALLS:
         session.state = ESCALATED
         session.escalation_reason = "model call budget reached"
 
@@ -458,7 +458,7 @@ def mastery_recap(session: MasterySession) -> str:
 
 
 def escalation_report(session: MasterySession) -> str:
-    """A parent-actionable hand-off. Facts are deterministic; Gemma interprets
+    """A parent-actionable hand-off. Facts are deterministic; GPT interprets
     the session (what worked, where the student is stuck) and proposes concrete
     interventions informed by which tutoring approaches already failed."""
     tried = list(dict.fromkeys(h["strategy"] for h in session.history if h["kind"] == "lesson"))
@@ -466,7 +466,7 @@ def escalation_report(session: MasterySession) -> str:
     right = sum(1 for a in answers if a["correct"])
     reasoning = [h["label"] for h in session.history if h["kind"] == "reasoning_grade"]
 
-    narrative = plainify(ask_gemma(
+    narrative = plainify(ask_gpt(
         "TASK: parent\n"
         "Write a brief, warm report for the PARENTS of a Grade 9 student whom an AI "
         "tutor worked with but could not bring to mastery. Use ONLY these facts; do not "
@@ -485,7 +485,7 @@ def escalation_report(session: MasterySession) -> str:
         "different from the tutoring approaches that already failed above.",
         max_new_tokens=400))
 
-    from gemma_client import format_teacher_report
+    from gpt_client import format_teacher_report
     header = (f"**Parent report** — student is stuck on **{session.trick_name}**. "
               f"Tutoring approaches tried: {', '.join(tried) or 'none'}. "
               f"Follow-up questions: {right} of {len(answers)} correct.")
