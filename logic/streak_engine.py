@@ -19,14 +19,50 @@ ANOMALIES_PATH = os.path.join(DATA_DIR, "anomalies.json")
 PROGRESS_PATH = os.path.join(DATA_DIR, "progress.json")
 
 
-def load_anomalies():
-    """
-    Reads data/anomalies.json from disk and returns it as a Python dictionary.
-    Each key is an Anomaly's id (like "vacuum_box"), and each value has a
-    "name", a "description", and a list of "questions".
-    """
+def _load_anomalies_file():
+    """Reads the whole data/anomalies.json file (chapters + anomalies)."""
     with open(ANOMALIES_PATH, "r") as f:
         return json.load(f)
+
+
+def load_anomalies():
+    """
+    Returns the FLAT dict of anomalies, keyed by anomaly id (like
+    "vacuum_box"), each with "name", "description", and "questions" --
+    exactly the same shape every existing caller already expects.
+    (MILESTONE 3: anomalies.json is now nested under a "chapters" key
+    and an "anomalies" key on disk, but this function unwraps that so
+    nothing that already reads load_anomalies() as a flat dict breaks.)
+    """
+    return _load_anomalies_file()["anomalies"]
+
+
+def load_chapters():
+    """
+    MILESTONE 3: Returns the "chapters" dict from anomalies.json. Each
+    chapter has a "name", an "accent_token" (a name to look up in
+    ui/design_tokens.py -- never a hardcoded hex color here), an
+    "unlocks_after" (the previous chapter's id, or None if it's always
+    unlocked), and a list of "anomalies" (ids belonging to that chapter).
+    """
+    return _load_anomalies_file()["chapters"]
+
+
+def is_chapter_unlocked(chapter_id, chapters, progress):
+    """
+    A chapter is unlocked if its "unlocks_after" is None (always-unlocked,
+    e.g. mechanics), OR every anomaly belonging to the PREVIOUS chapter has
+    been cleared at least once (per the existing get_anomaly_progress data
+    -- this does not invent a second progress system).
+    """
+    prereq_id = chapters[chapter_id]["unlocks_after"]
+    if prereq_id is None:
+        return True
+    prereq_anomalies = chapters[prereq_id]["anomalies"]
+    return all(
+        get_anomaly_progress(progress, aid)["cleared"]
+        for aid in prereq_anomalies
+    )
 
 
 def load_progress():
@@ -113,3 +149,21 @@ def update_streak(current_streak, tag):
 
 def is_anomaly_cleared(streak):
     return streak >= 2
+
+
+def debug_force_clear_chapter(progress, chapter):
+    """
+    DEBUG-ONLY (only ever called from behind ?debug=1): marks every
+    anomaly in the given chapter dict as cleared, so you can instantly
+    test a chapter's unlocked/locked state without grinding through the
+    real questions. Does not touch any anomaly NOT in this chapter.
+    """
+    for aid in chapter["anomalies"]:
+        update_anomaly_progress(progress, aid, 0, 2, True)
+    return progress
+
+
+def debug_reset_progress():
+    """DEBUG-ONLY: wipes all saved progress back to a fresh save."""
+    save_progress({})
+    return {}

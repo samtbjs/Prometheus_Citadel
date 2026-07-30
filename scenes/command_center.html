@@ -4,19 +4,12 @@
   <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding-top:18px;pointer-events:none;">
     <div style="color:#2dd6e0;letter-spacing:4px;font-size:15px;font-weight:700;text-shadow:0 0 12px rgba(45,214,224,0.6);">RESEARCH COMMAND CENTER</div>
     <div id="cc-stations" style="display:flex;gap:16px;margin-top:auto;margin-bottom:22px;">
-      <!-- mock/hardcoded chapter data — no anomalies.json read yet -->
-      <div class="cc-station" style="opacity:0;border:1px solid #2dd6e0;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(45,214,224,0.06);">
-        <div style="color:#2dd6e0;font-size:12px;letter-spacing:1px;">UNLOCKED</div>
-        <div style="color:#e6f1f3;font-size:14px;margin-top:4px;">Fundamental Forces</div>
-      </div>
-      <div class="cc-station" style="opacity:0;border:1px solid #3a4650;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(255,255,255,0.03);">
-        <div style="color:#8aa0aa;font-size:12px;letter-spacing:1px;">LOCKED</div>
-        <div style="color:#8aa0aa;font-size:14px;margin-top:4px;">Energy &amp; Heat</div>
-      </div>
-      <div class="cc-station" style="opacity:0;border:1px solid #3a4650;border-radius:6px;padding:10px 16px;min-width:140px;background:rgba(255,255,255,0.03);">
-        <div style="color:#8aa0aa;font-size:12px;letter-spacing:1px;">LOCKED</div>
-        <div style="color:#8aa0aa;font-size:14px;margin-top:4px;">Space-Time</div>
-      </div>
+      <!-- MILESTONE 3: real chapter data, injected by Python (see
+           ui/scene_viewer.py's render_command_center_scene), the same
+           general way render_anomaly_scene() injects __REACTION_VERDICT__.
+           __STATIONS_HTML__ is replaced with real <div class="cc-station">
+           markup built from data/anomalies.json's "chapters" + progress. -->
+      __STATIONS_HTML__
     </div>
   </div>
 </div>

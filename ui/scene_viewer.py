@@ -120,10 +120,58 @@ def render_boot_scene():
     _render_vendored_scene("boot.html", "BOOT SEQUENCE", height=420)
 
 
-def render_command_center_scene():
-    """Stage: command_center — hardcoded/mock 3-chapter station list,
-    no anomalies.json read yet (per Milestone 1 mock-data requirement)."""
-    _render_vendored_scene("command_center.html", "COMMAND CENTER", height=420)
+def _station_html(name, accent_hex, unlocked):
+    """One station card's markup, matching the original hardcoded look,
+    just with real data swapped in for name/color/lock-state."""
+    if unlocked:
+        border = accent_hex
+        bg = "rgba(45,214,224,0.06)"
+        label_color = accent_hex
+        label = "UNLOCKED"
+        text_color = "#e6f1f3"
+    else:
+        border = "#3a4650"
+        bg = "rgba(255,255,255,0.03)"
+        label_color = "#8aa0aa"
+        label = "LOCKED"
+        text_color = "#8aa0aa"
+    return f"""
+      <div class="cc-station" style="opacity:0;border:1px solid {border};border-radius:6px;padding:10px 16px;min-width:140px;background:{bg};">
+        <div style="color:{label_color};font-size:12px;letter-spacing:1px;">{label}</div>
+        <div style="color:{text_color};font-size:14px;margin-top:4px;">{name}</div>
+      </div>"""
+
+
+def render_command_center_scene(stations=None):
+    """Stage: command_center.
+
+    MILESTONE 3: stations is a list of dicts, one per chapter, each like
+    {"name": ..., "accent_hex": "#2dd6e0", "unlocked": True/False}, built
+    by app.py from data/anomalies.json's chapters + progress.json. If not
+    given (e.g. some future caller), falls back to the original 3 mock
+    stations so this never renders blank.
+    """
+    if not stations:
+        stations = [
+            {"name": "Fundamental Forces", "accent_hex": "#2dd6e0", "unlocked": True},
+            {"name": "Energy & Heat", "accent_hex": "#f4a640", "unlocked": False},
+            {"name": "Space-Time", "accent_hex": "#a06de0", "unlocked": False},
+        ]
+    stations_html = "".join(
+        _station_html(s["name"], s["accent_hex"], s["unlocked"]) for s in stations
+    )
+    try:
+        scene_html = _read_file(os.path.join(_SCENES_DIR, "command_center.html"))
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more scene assets are empty.")
+    except (OSError, ValueError):
+        _render_intro_fallback("COMMAND CENTER", 420)
+        return
+    scene_html = scene_html.replace("__STATIONS_HTML__", stations_html)
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=420)
 
 
 def render_anomaly_scene(verdict=None):

@@ -3,19 +3,43 @@ import uuid
 import streamlit as st
 from logic.streak_engine import (
     load_anomalies,
+    load_chapters,
     load_progress,
     save_progress,
     get_anomaly_progress,
     update_anomaly_progress,
     update_streak,
     is_anomaly_cleared,
+    is_chapter_unlocked,
+    debug_force_clear_chapter,
+    debug_reset_progress,
 )
 from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
 from ai.tutor import judge_explanation, mock_in_character_response
 from ui.styles import inject_custom_css
 from ui.scene_viewer import render_anomaly_scene, render_boot_scene, render_command_center_scene
+import ui.design_tokens as tokens
 
 inject_custom_css()
+
+debug_mode = st.query_params.get("debug") == "1"
+
+# ---------------------------------------------------------------------------
+# Load the list of Anomalies + Chapters from data/anomalies.json every time
+# the app runs. anomalies is still a FLAT dict keyed by anomaly id (Milestone
+# 3 keeps that shape via load_anomalies() even though the file on disk is
+# now nested) -- so this line doesn't need to move or change.
+# ---------------------------------------------------------------------------
+anomalies = load_anomalies()
+anomaly_ids = list(anomalies.keys())
+chapters = load_chapters()
+
+# Load saved progress from data/progress.json exactly once per browser
+# session, and keep it in Streamlit's session_state from then on so we're
+# not re-reading the file on every single click. (Moved above the intro
+# scenes in Milestone 3 -- the Command Center needs it to know lock state.)
+if "progress" not in st.session_state:
+    st.session_state.progress = load_progress()
 
 # ---------------------------------------------------------------------
 # MILESTONE 1 — new opening scene, gating entry into the existing app.
@@ -25,6 +49,9 @@ inject_custom_css()
 if "intro_stage" not in st.session_state:
     st.session_state.intro_stage = "boot"
 
+if "current_chapter" not in st.session_state:
+    st.session_state.current_chapter = None
+
 if st.session_state.intro_stage == "boot":
     render_boot_scene()
     if st.button("ENTER FACILITY"):
@@ -33,26 +60,54 @@ if st.session_state.intro_stage == "boot":
     st.stop()
 
 if st.session_state.intro_stage == "command_center":
-    render_command_center_scene()
-    if st.button("Continue to Anomaly Log"):
-        st.session_state.intro_stage = "done"
-        st.rerun()
+    # MILESTONE 3: stations are now REAL chapter data (name / accent color
+    # / lock state), not hardcoded mock divs. Lock state comes straight
+    # from is_chapter_unlocked(), which reuses the existing progress data
+    # -- no second progress system invented.
+    stations = [
+        {
+            "name": chapters[cid]["name"],
+            "accent_hex": getattr(tokens, chapters[cid]["accent_token"]),
+            "unlocked": is_chapter_unlocked(cid, chapters, st.session_state.progress),
+        }
+        for cid in chapters
+    ]
+    render_command_center_scene(stations=stations)
+
+    # The 3D cards above are visual only (they live inside a sandboxed
+    # iframe with no click-back-to-Streamlit hook). These real buttons
+    # right underneath are what you actually click -- one per chapter,
+    # in the same left-to-right order as the stations above.
+    cols = st.columns(len(chapters))
+    for col, cid in zip(cols, chapters):
+        chapter = chapters[cid]
+        unlocked = is_chapter_unlocked(cid, chapters, st.session_state.progress)
+        with col:
+            if unlocked:
+                if st.button(f"▶ {chapter['name']}", key=f"enter_chapter_{cid}"):
+                    st.session_state.current_chapter = cid
+                    st.session_state.intro_stage = "done"
+                    st.session_state.view = "menu"
+                    st.rerun()
+            else:
+                st.button(f"🔒 {chapter['name']}", key=f"locked_chapter_{cid}", disabled=True)
+
+    if debug_mode:
+        st.caption("DEBUG: instantly mark a chapter's anomalies cleared, to test lock states.")
+        dcols = st.columns(len(chapters) + 1)
+        for col, cid in zip(dcols, chapters):
+            with col:
+                if st.button(f"Force-clear: {chapters[cid]['name']}", key=f"debug_clear_{cid}"):
+                    debug_force_clear_chapter(st.session_state.progress, chapters[cid])
+                    save_progress(st.session_state.progress)
+                    st.rerun()
+        with dcols[-1]:
+            if st.button("Reset all progress", key="debug_reset_progress"):
+                st.session_state.progress = debug_reset_progress()
+                st.rerun()
     st.stop()
 
 st.title("Prometheus Lab")
-
-# ---------------------------------------------------------------------------
-# Load the list of Anomalies from data/anomalies.json every time the app
-# runs. This replaces the old hardcoded MOCK_QUESTIONS list from Phase 1.
-# ---------------------------------------------------------------------------
-anomalies = load_anomalies()
-anomaly_ids = list(anomalies.keys())
-
-# Load saved progress from data/progress.json exactly once per browser
-# session, and keep it in Streamlit's session_state from then on so we're
-# not re-reading the file on every single click.
-if "progress" not in st.session_state:
-    st.session_state.progress = load_progress()
 
 # -----------------------------------------------------------------------
 # PHASE 4 FIX: messages (like "Correct!" or an AI-error warning) used to
@@ -105,8 +160,23 @@ def _enter_anomaly(anomaly_id):
 # every Submit) and a button to enter each one.
 # -----------------------------------------------------------------------
 if st.session_state.view == "menu":
-    st.subheader("Select an Anomaly")
-    for aid in anomaly_ids:
+    # MILESTONE 3: only show anomalies from the chapter the player entered
+    # through in the Command Center -- not the old flat all-anomalies list.
+    current_chapter_id = st.session_state.current_chapter
+    if current_chapter_id and current_chapter_id in chapters:
+        chapter_anomaly_ids = chapters[current_chapter_id]["anomalies"]
+        st.subheader(f"Select an Anomaly — {chapters[current_chapter_id]['name']}")
+    else:
+        # Fallback (shouldn't normally happen): show everything rather
+        # than crash if current_chapter was never set.
+        chapter_anomaly_ids = anomaly_ids
+        st.subheader("Select an Anomaly")
+
+    if st.button("← Back to Command Center"):
+        st.session_state.intro_stage = "command_center"
+        st.rerun()
+
+    for aid in chapter_anomaly_ids:
         info = anomalies[aid]
         saved = get_anomaly_progress(st.session_state.progress, aid)
         status = "✅ Cleared" if saved["cleared"] else "🔒 In Progress"
@@ -210,7 +280,6 @@ else:
     # to False/"resolved" so a real (or failed) AI call still behaves
     # exactly as before.
     # -----------------------------------------------------------------
-    debug_mode = st.query_params.get("debug") == "1"
     if debug_mode:
         use_mock = st.checkbox(
             "Use mock verdict instead of real AI (fallback if API fails or I'm low on budget)"
