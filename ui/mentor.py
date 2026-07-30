@@ -22,3 +22,30 @@ DEBRIEF_LINE_FALLBACK = "Anomaly stabilized. Filed for facility record."
 
 def debrief_line_for(anomaly_id):
     return DEBRIEF_LINES.get(anomaly_id, DEBRIEF_LINE_FALLBACK)
+
+
+# MILESTONE 6: Mission Briefing lines, one 2-3 line briefing per chapter,
+# in ARBITER's same clinical voice as DEBRIEF_LINES above. Shown once per
+# chapter per session by app.py, before that chapter's anomaly menu.
+BRIEFING_LINES = {
+    "mechanics": [
+        "Structural anomaly logged in this wing: force balances refusing to close.",
+        "Objects here behave as though Newton's laws are negotiable. They are not.",
+        "Find where the accounting fails, then correct it.",
+    ],
+    "thermal": [
+        "Thermal drift flagged across this wing's chambers.",
+        "Two bodies, one room, no agreement on temperature. That should have resolved by now.",
+        "Trace where the heat is actually flowing, and why it stopped.",
+    ],
+    "quantum": [
+        "Reference-frame anomaly detected in this wing.",
+        "The clocks here disagree with each other. Each one is still correct — for its own frame.",
+        "Reconcile them. Do not assume a single universal clock.",
+    ],
+}
+BRIEFING_LINES_FALLBACK = ["Anomaly signatures detected in this wing. Proceed with standard protocol."]
+
+
+def briefing_lines_for(chapter_id):
+    return BRIEFING_LINES.get(chapter_id, BRIEFING_LINES_FALLBACK)

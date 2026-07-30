@@ -19,6 +19,7 @@ import ui.design_tokens as tokens
 from ui.focal_objects import FOCAL_OBJECT_CONFIG
 from ui.mentor_visual import MENTOR_CORE_CONFIG
 from ui.transitions import build_streaks_html
+from ui.dialogue import build_dialogue_lines_html, build_dialogue_reveal_js
 
 _THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
 _PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
@@ -304,6 +305,54 @@ def _render_debrief_fallback(anomaly_name, mentor_name, mentor_line, newly_unloc
         """,
         height=height,
     )
+
+
+def _render_briefing_fallback(chapter_name, mentor_name, lines, height):
+    lines_html = "".join(f"<div style='margin-top:8px;'>{line}</div>" for line in lines)
+    components.html(
+        f"""
+        <div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+            box-sizing:border-box;padding:24px;background:#05080a;font-family:monospace;color:#e6f1f3;">
+          <div style="max-width:480px;text-align:center;">
+            <div style="color:#8aa0aa;letter-spacing:1px;font-size:12px;">{mentor_name} // MISSION BRIEFING</div>
+            <div style="font-size:18px;margin:8px 0;">{chapter_name}</div>
+            <div style="font-size:14px;line-height:1.5;">{lines_html}</div>
+          </div>
+        </div>
+        """,
+        height=height,
+    )
+
+
+def render_briefing_scene(chapter_name, mentor_name, lines, accent_hex, mentor_id="arbiter", height=340):
+    """Stage: briefing (Milestone 6). Shown once per chapter per session,
+    right after the Travel Transition and before that chapter's anomaly
+    menu -- see app.py's "briefing" view. Reuses ARBITER's core visual
+    exactly like render_debrief_scene() above, and reveals `lines` one at
+    a time via ui/dialogue.py's reusable helper."""
+    config = MENTOR_CORE_CONFIG.get(mentor_id, MENTOR_CORE_CONFIG["arbiter"])
+    try:
+        three_js = _read_file(os.path.join(_VENDOR_DIR, "three.min.js"))
+        gsap_js = _read_file(os.path.join(_VENDOR_DIR, "gsap.min.js"))
+        scene_html = _read_file(os.path.join(_SCENES_DIR, "briefing.html"))
+        if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
+            raise ValueError("One or more briefing scene assets are empty.")
+    except (OSError, ValueError):
+        _render_briefing_fallback(chapter_name, mentor_name, lines, height)
+        return
+
+    dialogue_html = build_dialogue_lines_html(lines)
+    dialogue_js = build_dialogue_reveal_js(len(lines))
+    scene_html = scene_html.replace("__ACCENT_HEX_JS__", "0x" + accent_hex.lstrip("#"))
+    scene_html = scene_html.replace("__ACCENT_HEX_CSS__", accent_hex)
+    scene_html = scene_html.replace("__CORE_SETUP_JS__", config["core_setup_js"])
+    scene_html = scene_html.replace("__CORE_IDLE_JS__", config["core_idle_js"])
+    scene_html = scene_html.replace("__MENTOR_NAME__", mentor_name)
+    scene_html = scene_html.replace("__CHAPTER_NAME__", chapter_name)
+    scene_html = scene_html.replace("__DIALOGUE_LINES_HTML__", dialogue_html)
+    scene_html = scene_html.replace("__DIALOGUE_REVEAL_JS__", dialogue_js)
+    full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
+    components.html(full_html, height=height)
 
 
 def render_debrief_scene(anomaly_name, mentor_name, mentor_line, newly_unlocked_names, mentor_id="arbiter", height=340):

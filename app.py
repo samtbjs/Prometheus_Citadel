@@ -22,11 +22,12 @@ from ui.styles import inject_custom_css
 from ui.scene_viewer import (
     render_anomaly_scene,
     render_boot_scene,
+    render_briefing_scene,
     render_command_center_scene,
     render_debrief_scene,
     render_transition_scene,
 )
-from ui.mentor import MENTOR_NAME, debrief_line_for
+from ui.mentor import MENTOR_NAME, briefing_lines_for, debrief_line_for
 import ui.design_tokens as tokens
 
 inject_custom_css()
@@ -118,6 +119,12 @@ if "intro_stage" not in st.session_state:
 if "current_chapter" not in st.session_state:
     st.session_state.current_chapter = None
 
+# MILESTONE 6: which chapters have already shown their Mission Briefing
+# THIS session. Deliberately session-only (not saved to progress.json)
+# so every fresh run sees each chapter's briefing again once.
+if "briefed_chapters" not in st.session_state:
+    st.session_state.briefed_chapters = set()
+
 if st.session_state.intro_stage == "boot":
     render_boot_scene()
     if st.button("ENTER FACILITY"):
@@ -152,11 +159,12 @@ if st.session_state.intro_stage == "command_center":
             if unlocked:
                 if st.button(f"▶ {chapter['name']}", key=f"enter_chapter_{cid}"):
                     st.session_state.current_chapter = cid
-                    _begin_transition(
-                        view="menu",
-                        intro_stage="done",
-                        accent_hex=getattr(tokens, chapter["accent_token"]),
-                    )
+                    chapter_accent = getattr(tokens, chapter["accent_token"])
+                    # MILESTONE 6: first time this chapter is entered THIS
+                    # session, detour through the Mission Briefing; after
+                    # that, go straight to the menu like before.
+                    next_view = "menu" if cid in st.session_state.briefed_chapters else "briefing"
+                    _begin_transition(view=next_view, intro_stage="done", accent_hex=chapter_accent)
             else:
                 st.button(f"🔒 {chapter['name']}", key=f"locked_chapter_{cid}", disabled=True)
 
@@ -173,6 +181,21 @@ if st.session_state.intro_stage == "command_center":
             if st.button("Reset all progress", key="debug_reset_progress"):
                 st.session_state.progress = debug_reset_progress()
                 st.rerun()
+
+        # MILESTONE 6: re-trigger any chapter's Mission Briefing on
+        # demand, since otherwise it only shows once per chapter per
+        # session -- same button-per-chapter pattern as Force-clear above.
+        st.caption("DEBUG: re-trigger a chapter's Mission Briefing on demand.")
+        bcols = st.columns(len(chapters))
+        for col, cid in zip(bcols, chapters):
+            with col:
+                if st.button(f"Briefing: {chapters[cid]['name']}", key=f"debug_briefing_{cid}"):
+                    st.session_state.current_chapter = cid
+                    _begin_transition(
+                        view="briefing",
+                        intro_stage="done",
+                        accent_hex=getattr(tokens, chapters[cid]["accent_token"]),
+                    )
 
         # -------------------------------------------------------------
         # MILESTONE 5: instantly jump to the Mission Debrief scene for
@@ -292,6 +315,29 @@ if st.session_state.view == "menu":
                     if current_chapter_id in chapters else tokens.CHAPTER_1_ACCENT
                 )
                 _begin_transition(view="anomaly_room", accent_hex=enter_accent)
+    st.stop()
+
+# -----------------------------------------------------------------------
+# MILESTONE 6: Mission Briefing. Shown once per chapter per session,
+# right after the Travel Transition into that chapter and before its
+# anomaly menu -- see the Command Center button + debug buttons above,
+# which decide when to route here. A separate "view" state, same pattern
+# as "menu"/"anomaly_room"/"debrief" -- doesn't touch any of their logic.
+# -----------------------------------------------------------------------
+if st.session_state.view == "briefing":
+    briefing_chapter_id = st.session_state.current_chapter
+    chapter = chapters.get(briefing_chapter_id)
+    chapter_name = chapter["name"] if chapter else "Unknown Wing"
+    chapter_accent = getattr(tokens, chapter["accent_token"]) if chapter else tokens.MENTOR_ACCENT
+    render_briefing_scene(
+        chapter_name=chapter_name,
+        mentor_name=MENTOR_NAME,
+        lines=briefing_lines_for(briefing_chapter_id),
+        accent_hex=chapter_accent,
+    )
+    if st.button("Begin Investigation", type="primary"):
+        st.session_state.briefed_chapters.add(briefing_chapter_id)
+        _begin_transition(view="menu", accent_hex=chapter_accent)
     st.stop()
 
 # -----------------------------------------------------------------------
