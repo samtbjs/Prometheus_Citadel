@@ -1,13 +1,14 @@
 [theme]
 base = "dark"
-primaryColor = "#2dd6e0"
-backgroundColor = "#05080a"
-secondaryBackgroundColor = "#0d1418"
-textColor = "#e6f1f3"
-font = "monospace"
+primaryColor = "#e08d6d"
+backgroundColor = "#0b0710"
+secondaryBackgroundColor = "#1c1119"
+textColor = "#f2e8dc"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
 
 [server]
 runOnSave = true
-
-[client]
-toolbarMode = "minimal"
+enableStaticServing = true

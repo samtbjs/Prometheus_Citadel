@@ -1,0 +1,143 @@
+"""
+tutor.py  —  turns ONE wrong answer into a study-guide card.
+
+Splits cleanly into two kinds of content:
+  * FACTS we already have (no AI needed): the snare name, the correct
+    answer, and the worked solution from our verified bank.
+  * GENERATED content (Prometheus Lab's job): a friendly personalized explanation and a
+    fresh follow-up practice question. These go through ask_gemma().
+
+The `strategy` argument is how the AGENT adapts: if a plain explanation doesn't
+land, it re-calls with a different strategy (see agent.py / the blueprint).
+"""
+from __future__ import annotations
+from gemma_client import ask_gemma, plainify
+from selection import next_on_idea
+
+STRATEGIES = ["explanation", "worked_example", "visual", "analogy"]
+
+
+def diagnose(item: dict, chosen_label: str) -> dict | None:
+    """Which snare does this wrong choice reveal? Pure lookup from the
+    ground-truth tags — 100% reliable, no model call."""
+    for opt in item["options"]:
+        if opt["label"] == chosen_label and not opt["is_correct"]:
+            return {"id": opt.get("trick_id"), "name": opt.get("trick_name")}
+    return None
+
+
+def pick_practice(item: dict, misc: dict, questions: list, used_ids: set) -> dict:
+    """The 'Now you try' question, as a full interactive item. Bank-first
+    (verified answer key + worked solution), generation last: a small model can
+    produce a garbled or wrong question, a bank item cannot."""
+    # Modelled on the question they actually missed, so the topic cannot drift.
+    # A verified bank item is better evidence when one genuinely fits, but the
+    # tag alone does not prove a fit: the same wrong idea is tagged on questions
+    # about solving equations AND about y-intercepts.
+    from practice_sheet import similar_to
+    correct = next((o["text"] for o in item["options"] if o.get("is_correct")), "")
+    made = similar_to(item["question"], misc.get("name", ""), item.get("strand", ""),
+                      correct_text=correct, solution=item.get("solution", ""))
+    if made:
+        return {**made, "id": f"GEN-{item['id']}"}
+
+    q = next_on_idea(questions, misc.get("id"), used_ids, misc.get("name"),
+                     item.get("topic"))
+    if q:
+        used_ids.add(q["id"])
+        return {"source": "bank", **q}
+
+    # The bank is out of questions on this idea. It does NOT fall back to the
+    # strand: slope and the distributive property are both Algebra, and a
+    # student who was just caught by one is not helped by the other.
+    #
+    # A written question here is a full multiple-choice item that Gemma has
+    # solved again blind and agreed with, so "now you try" is still something
+    # the student can answer and be marked on.
+    from practice_sheet import generate_audited
+    made = generate_audited(misc["name"], item.get("strand", ""), item["question"])
+    if made:
+        return {**made, "id": f"GEN-{item['id']}"}
+
+    text = plainify(ask_gemma(
+        f"TASK: practice\n"
+        f"TRICK: {misc['name']}\n"
+        f"Write ONE fresh Grade 9 practice question, in English, working the "
+        f"SAME idea as: {item['question']}\n"
+        f"The idea to work is: {misc['name']}\n"
+        f"Introduce NO new concept, formula or skill, and do not move to a "
+        f"neighbouring topic: if the idea is about exponents do not write a "
+        f"percentage question, if it is about the median do not write one about "
+        f"probability. Being in the same part of the course is NOT the same as "
+        f"being the same idea.\n"
+        f"Use different numbers. Output ONLY the question itself - no answer, "
+        f"no solution, no extra commentary."
+    ))
+    return {"source": "generated", "id": f"GEN-{item['id']}", "question": text}
+
+
+def hint(practice: dict, misc: dict, level: int) -> str:
+    """A progressive hint for a practice item, grounded in its verified
+    solution. Level 1 = a nudge; level 2 = the first concrete step."""
+    depth = ("a gentle nudge at the right first thing to think about - do NOT "
+             "reveal any step of the solution" if level <= 1 else
+             "the first concrete step of the solution, but not the final answer")
+    grounding = (f"The verified solution is: {practice.get('solution', '')}\n"
+                 if practice.get("solution") else "")
+    return plainify(ask_gemma(
+        f"TASK: explain\n"
+        f"TRICK: {misc['name']}\n"
+        f"A Grade 9 student is attempting: {practice['question']}\n"
+        f"{grounding}"
+        f"Give ONE hint - {depth}. One or two sentences, encouraging, in plain "
+        f"text (no LaTeX, no dollar signs), and any numbers must come from the "
+        f"verified solution above."
+    ))
+
+
+def study_guide(item: dict, chosen_label: str, strategy: str = "explanation",
+                questions: list = None, used_ids: set = None) -> dict:
+    """Build the full study-guide card for one missed question."""
+    misc = diagnose(item, chosen_label) or {"id": None, "name": "an unclear error"}
+    correct = next(o for o in item["options"] if o["is_correct"])
+    used_ids = used_ids if used_ids is not None else set()
+
+    # Grounding rule: Gemma never recomputes the math. It receives the verified
+    # answer and worked solution and explains WHY the student's method fails —
+    # we caught the small model inventing wrong arithmetic when asked to redo it.
+    explain_prompt = (
+        f"TASK: {'visual' if strategy == 'visual' else 'explain'}\n"
+        f"TRICK: {misc['name']}\n"
+        f"The student was asked: {item['question']}\n"
+        f"They chose '{_text(item, chosen_label)}'. The correct answer is "
+        f"'{correct['text']}', and the verified solution is: {item.get('solution', '')}\n"
+        f"In under 120 words, for a 14-year-old, explain WHY the student's method "
+        f"('{misc['name']}') gives the wrong result and what the right way of "
+        f"thinking is. Do NOT redo the calculation and do NOT state any new "
+        f"numeric results — the verified solution above is the only math. "
+        f"Plain, encouraging language."
+    )
+
+    practice = pick_practice(item, misc, questions, used_ids)
+    return {
+        "item_id": item["id"],
+        "strand": item["strand"],
+        "question": item["question"],
+        "chosen": _text(item, chosen_label),
+        "correct": correct["text"],
+        "trick": misc,
+        "strategy": strategy,
+        "explanation": plainify(ask_gemma(explain_prompt)),  # Gemma, LaTeX stripped
+        "worked_solution": item.get("solution", ""),    # real, from the bank
+        "solution": item.get("solution", ""),           # same, under the bank's key
+        "traps": item.get("traps", []),                 # wrong answers, by their text
+        "practice": practice,
+        "hint": hint(practice, misc, level=1),          # ready instantly, no rerun
+    }
+
+
+def _text(item: dict, label: str) -> str:
+    for o in item["options"]:
+        if o["label"] == label:
+            return o["text"]
+    return "(no answer)"

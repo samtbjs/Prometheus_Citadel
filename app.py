@@ -1,645 +1,4165 @@
-import time
-import uuid
+"""
+app.py  —  Prometheus Lab (student-facing quiz + AI study guide).
 
+Run it:   streamlit run app.py
+
+Flow:  take a short quiz  ->  submit  ->  score + a personalized study guide the
+AGENT builds from your wrong answers (explanation + fresh practice per mistake),
+plus the agent's read on your #1 snare and a parent hand-off if needed.
+"""
+import json
+import re
+from html import escape as _hescape
+from pathlib import Path
 import streamlit as st
-from logic.streak_engine import (
-    load_anomalies,
-    load_chapters,
-    load_progress,
-    save_progress,
-    get_anomaly_progress,
-    update_anomaly_progress,
-    update_streak,
-    is_anomaly_cleared,
-    is_chapter_unlocked,
-    debug_force_clear_chapter,
-    debug_force_clear_anomaly,
-    debug_reset_progress,
-)
-from logic.physics_calc import check_vacuum_box_force, vacuum_box_feedback
-from ai.tutor import judge_explanation, mock_in_character_response
-from ai.mastery import record_attempt_and_get_lesson, reset_mastery_state
-from ui.styles import inject_custom_css
-from ui.scene_viewer import (
-    render_anomaly_scene,
-    render_boot_scene,
-    render_briefing_scene,
-    render_command_center_scene,
-    render_debrief_scene,
-    render_transition_scene,
-)
-from ui.mentor import MENTOR_NAME, briefing_lines_for, debrief_line_for
-import ui.design_tokens as tokens
+import streamlit.components.v1 as components
 
-inject_custom_css()
+import agent
+import mastery as m
+import tutor
+import rewards
+import practice_sheet
+import progress
+import onboarding
+from gemma_client import plainify
 
-debug_mode = st.query_params.get("debug") == "1"
+QUESTIONS = json.loads((Path(__file__).parent / "data" / "questions.json").read_text())
+STRANDS = sorted({q["strand"] for q in QUESTIONS})
+
+# PROMETHEUS LAB is the front door; the classic dashboard is one click away.
+# A first-time challenger meets the introduction before the citadel - it is
+# skippable, and never shown twice in a sitting.
+if "stage" not in st.session_state:
+    st.session_state.adventure = True
+    st.session_state.stage = "onboard"
+
+st.set_page_config(
+    page_title="PROMETHEUS LAB",
+    layout="centered")
+
+_GAME_SKIN = """
+<style>
+:root { --ink:#f2e8dc; --muted:#b9a794; --line:#3a2a35; --card:#160e18; --accent:#e08d6d; }
+html, body, [class*="css"], p, li, label, span, div, button, input {
+  font-family:'Trebuchet MS','Segoe UI',sans-serif;
+}
+[data-testid="stAppViewContainer"]{
+  background:radial-gradient(70% 45% at 50% 0%, #1c1019 0%, #0b0710 55%) #0b0710 !important}
+[data-testid="stHeader"]{background:transparent !important}
+/* The dev-chrome toolbar (Deploy + the three-dot menu) is not part of the game.
+   Left visible it floats fixed at the top-right over the app's own top text on
+   every content-tall screen. A shipped game hides it everywhere. */
+[data-testid="stToolbar"]{display:none !important}
+html,body,p,li,label,span,div{color:var(--ink)}
+h1,h2,h3{
+  font-weight:900 !important; text-transform:uppercase; letter-spacing:-0.5px;
+  background:linear-gradient(135deg,#ffe9d6 25%,#e08d6d 70%,#b98868);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(224,141,109,.4));
+}
+.stCaption,[data-testid="stCaptionContainer"]{color:var(--muted) !important;
+  letter-spacing:.06em}
+.stButton button, .stDownloadButton button{
+  border-radius:24px;border:1px solid rgba(255,240,225,.16);
+  background:rgba(255,240,225,.06);color:#d9c6b2;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;font-size:.8rem;box-shadow:none}
+.stButton button:hover{background:rgba(255,240,225,.15);color:#fff;
+  border-color:rgba(255,240,225,.3)}
+.stButton button[kind="primary"]{
+  background:linear-gradient(135deg,#e08d6d,#a8434f);border:none;color:#1a0f14;
+  border-radius:10px;font-weight:900;letter-spacing:.12em;
+  box-shadow:0 8px 24px rgba(224,141,109,.45)}
+.stButton button[kind="primary"]:hover{transform:translateY(-1px);color:#0b0710}
+[data-testid="stVerticalBlockBorderWrapper"]{
+  background:linear-gradient(160deg,#1c1119,#160e18);
+  border:1px solid rgba(255,236,214,.12) !important;border-radius:14px;
+  box-shadow:0 14px 34px rgba(0,0,0,.5), 0 0 22px rgba(224,141,109,.08)}
+[data-testid="stExpander"]{border:1px solid rgba(255,236,214,.12);border-radius:10px;
+  background:var(--card)}
+[data-testid="stExpander"] summary{color:#d9c6b2;text-transform:uppercase;
+  font-size:.78rem;letter-spacing:.1em;font-weight:700}
+[data-testid="stMetricValue"]{
+  font-weight:900;
+  background:linear-gradient(135deg,#ffe9d6,#e08d6d);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+[data-testid="stMetricLabel"] p{text-transform:uppercase;letter-spacing:.14em;
+  font-size:.68rem;color:var(--muted) !important}
+hr{border-color:var(--line) !important}
+/* answer options as selectable game chips */
+.stRadio > div{gap:6px}
+.stRadio label{
+  background:#1c1119;border:1px solid rgba(255,236,214,.12);border-radius:10px;
+  padding:9px 14px;margin:0;width:100%;transition:border-color .15s, box-shadow .15s}
+.stRadio label:hover{border-color:#e08d6d;box-shadow:0 0 14px rgba(224,141,109,.25)}
+.stRadio label p,.stRadio label{color:#f2e8dc !important}
+[data-testid="stWidgetLabel"] p{color:#d9c6b2 !important}
+.stProgress > div > div > div{background:linear-gradient(90deg,#e08d6d,#ffd166) !important;
+  box-shadow:0 0 12px rgba(224,141,109,.5)}
+.stTextInput input{background:#1c1119;color:#f2e8dc;border:1px solid var(--line);
+  border-radius:10px}
+[data-testid="stFileUploaderDropzone"]{background:#1c1119;border:1px dashed var(--line)}
+code, pre{background:#1c1119 !important;color:#ffd9b8 !important}
+.gwb-note{border:1px solid rgba(255,236,214,.12);border-left:3px solid var(--accent);
+  border-radius:10px;background:linear-gradient(160deg,#1c1119,#160e18);
+  padding:.85rem 1.1rem;margin:.4rem 0 .9rem;color:var(--ink);
+  box-shadow:0 0 18px rgba(224,141,109,.14)}
+.gwb-note .label{display:block;font-size:.68rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:.3rem;font-weight:900}
+.gwb-kicker{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:.2rem;font-weight:900}
+.katex{color:#ffefdd}
+/* selects and their dropdown menus: dark, readable */
+[data-baseweb="select"] > div{background:#1c1119 !important;border-color:#3a2a35 !important}
+[data-baseweb="select"] div, [data-baseweb="select"] span, [data-baseweb="select"] input{color:#f2e8dc !important}
+[data-baseweb="select"] svg{fill:#e08d6d !important}
+[data-baseweb="popover"] [role="listbox"], [data-baseweb="popover"] ul, [data-baseweb="menu"]{
+  background:#1c1119 !important;border:1px solid #3a2a35 !important}
+[data-baseweb="popover"] [role="option"], [data-baseweb="popover"] li, [data-baseweb="menu"] li{
+  color:#f2e8dc !important;background:#1c1119 !important}
+[data-baseweb="popover"] [role="option"]:hover, [data-baseweb="popover"] li:hover,
+[data-baseweb="menu"] li:hover, [data-baseweb="popover"] li[aria-selected="true"]{
+  background:#2a1a26 !important;color:#ffefdd !important}
+/* The letters-home button: reachable from every screen, including the
+   full-bleed game stages, without reloading the page and losing the session.
+   Kept to a small round glyph so it never competes with the game - the label
+   stays in the DOM for screen readers and surfaces as a tooltip on hover.
+   The mark is drawn here rather than fetched: original, no licence to honour,
+   and nothing to load over a network this app is proud not to use. */
+[class*="st-key-letters_float"]{position:fixed;left:16px;bottom:16px;z-index:1000;width:auto}
+[class*="st-key-letters_float"] button{background:rgba(20,12,22,.9) !important;
+  border:1px solid #3a2a35 !important;border-radius:50% !important;
+  width:46px !important;height:46px !important;min-height:46px !important;
+  padding:0 !important;overflow:hidden !important;
+  box-shadow:0 6px 18px rgba(0,0,0,.55) !important;
+  background-image:url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" \
+stroke="%23d9c8bb" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">\
+<circle cx="15" cy="12" r="5.8"/>\
+<path d="M5.5 42v-8.5C5.5 27.7 9.8 23.4 15 23.4"/>\
+<circle cx="32.5" cy="24" r="4.4"/>\
+<path d="M25 42v-5.6c0-4.1 3.4-7.5 7.5-7.5s7.5 3.4 7.5 7.5V42"/>\
+<path d="M15.5 23.6c5.6 0 9.4 3.4 12 8.2"/>\
+</svg>') !important;
+  background-repeat:no-repeat !important;background-position:center !important;
+  background-size:25px 25px !important}
+[class*="st-key-letters_float"] button p, [class*="st-key-letters_float"] button div{
+  font-size:0 !important;line-height:0 !important;color:transparent !important}
+[class*="st-key-letters_float"] button:hover{border-color:#e08d6d !important;
+  background-color:rgba(38,20,28,.95) !important}
+/* On a phone the scenes put their own controls across the bottom, so this one
+   keeps a tighter corner and every scene leaves that corner clear. */
+@media (max-width:700px){
+  [class*="st-key-letters_float"]{left:10px;bottom:10px}
+  [class*="st-key-letters_float"] button{width:44px !important;height:44px !important;
+    min-height:44px !important;background-size:23px 23px !important}
+}
+/* a quiet dot when notes are waiting, instead of a number stealing space */
+.st-key-letters_float_notes button{border-color:#e08d6d !important}
+.st-key-letters_float_notes::after{content:'';position:absolute;
+  top:2px;right:2px;width:11px;height:11px;border-radius:50%;
+  background:#e08d6d;border:2px solid #0b0710;pointer-events:none}
+/* A scene that has sized itself to the phone screen (see GWB.fitFrame) marks
+   its own frame; the wrapper Streamlit pinned to the height Python guessed
+   then gets out of the way and shrink-wraps whatever the scene chose. */
+[data-testid="stElementContainer"]:has(> iframe[data-gwb-fit]){
+  height:auto !important;flex:0 0 auto !important}
+[data-testid="stElementContainer"] > iframe[data-gwb-fit]{display:block}
+/* ---- invisible plumbing must not cost a flex gap ----------------------
+   Streamlit lays the page out as a flex column with a 16px gap between every
+   block, and it counts blocks it cannot see: the citadel's hidden relay
+   buttons, the scroll fix, a bare <style> tag. Eleven of them stack into a
+   dead band a third of a phone screen tall above the scene. Pulling the
+   wrappers out of the flow removes the gap with them - a hidden button is
+   still clickable by script, which is all the relays ever needed. */
+[data-testid="stVerticalBlock"] > div:has(> [class*="st-key-relay_"]),
+[data-testid="stVerticalBlock"] > div:has(> [class*="st-key-scrollfix"]),
+[data-testid="stVerticalBlock"] > div:has(> [class*="st-key-letters_float"]),
+[data-testid="stVerticalBlock"] > [class*="st-key-relay_"],
+[data-testid="stVerticalBlock"] > [class*="st-key-scrollfix"],
+[data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child){
+  position:absolute !important;height:0 !important;min-height:0 !important;
+  width:0 !important;margin:0 !important;padding:0 !important;
+  overflow:hidden !important;opacity:0 !important}
+/* The progress table: st.dataframe renders into a fixed-width canvas that
+   clips the long "Details" text off the right edge with no scrollbar on a
+   phone. This plain table lets Details wrap instead, so a parent reads the
+   whole sentence at any width. */
+.gwb-ptable{width:100%;overflow-x:auto;margin:.2rem 0 .6rem}
+.gwb-ptable table{width:100%;border-collapse:collapse;font-size:.9rem}
+.gwb-ptable th{text-align:left;text-transform:uppercase;letter-spacing:.1em;
+  font-size:.66rem;color:var(--muted);font-weight:800;padding:6px 10px;
+  border-bottom:1px solid var(--line)}
+.gwb-ptable td{padding:8px 10px;border-bottom:1px solid rgba(255,236,214,.08);
+  vertical-align:top;color:var(--ink)}
+.gwb-ptable td.pt-what{white-space:nowrap;font-weight:700;color:#d9c6b2}
+.gwb-ptable td.pt-count{white-space:nowrap;text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--accent);font-weight:800}
+.gwb-ptable td.pt-details{overflow-wrap:anywhere;line-height:1.4;
+  color:#d9ccbe}
+.gwb-taunt{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;
+  align-items:flex-end;gap:10px;animation:gwbBob 3.2s ease-in-out infinite}
+.gwb-bubble{background:#1c1119;border:1px solid #e08d6d;
+  border-radius:14px 14px 2px 14px;padding:9px 13px;color:#f2e8dc;font-size:.82rem;
+  max-width:210px;box-shadow:0 0 16px rgba(224,141,109,.35)}
+.gwb-tmon{filter:drop-shadow(0 0 12px rgba(224,141,109,.5));
+  animation:gwbSway 2.6s ease-in-out infinite}
+@keyframes gwbBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@keyframes gwbSway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+
+/* ======================= PHONE ========================================
+   Portrait is the case that matters. Nothing is hidden here: the page keeps
+   every control it has on a desktop, at a size a thumb can hit and a size
+   the eye can read, and anything genuinely wider than the screen - a table,
+   a code block, a chart - scrolls inside its own box rather than dragging
+   the whole page sideways. */
+@media (max-width:700px){
+  html,body{overflow-x:hidden}
+  [data-testid="stMainBlockContainer"], .block-container{
+    padding-left:14px !important;padding-right:14px !important;
+    padding-top:2.4rem !important}
+  h1{font-size:1.72rem !important;line-height:1.12 !important}
+  h2{font-size:1.28rem !important;line-height:1.18 !important}
+  h3{font-size:1.06rem !important}
+  p,li,label,.stMarkdown{font-size:.95rem}
+  /* real thumb targets, and never two of them touching */
+  .stButton button, .stDownloadButton button{
+    min-height:46px;padding:11px 16px;font-size:.78rem;white-space:normal;
+    line-height:1.2}
+  [data-testid="stHorizontalBlock"]{gap:10px}
+  /* answer chips: bigger hit area, and the option text may wrap */
+  .stRadio > div{gap:9px}
+  .stRadio label{padding:12px 13px;min-height:48px;align-items:flex-start}
+  .stRadio label p{font-size:.95rem;line-height:1.35}
+  /* the taunt in the corner of a battle must not sit on the questions */
+  .gwb-taunt{right:10px;gap:6px}
+  .gwb-bubble{max-width:150px;font-size:.76rem;padding:7px 10px}
+  /* wide things scroll inside themselves, never sideways as a page */
+  [data-testid="stTable"],[data-testid="stDataFrame"],
+  [data-testid="stExpander"] [data-testid="stTable"],pre{
+    max-width:100%;overflow-x:auto}
+  [data-testid="stTable"] table{font-size:.8rem}
+  [data-testid="stTable"] th,[data-testid="stTable"] td{padding:6px 8px}
+  code,pre{font-size:.8rem;white-space:pre-wrap;word-break:break-word}
+  [data-testid="stExpander"] summary{padding:12px 12px;font-size:.74rem}
+  [data-testid="stExpander"] [data-testid="stExpanderDetails"]{padding:0 12px 12px}
+  [data-testid="stMetricValue"]{font-size:1.5rem !important}
+  [data-testid="stVerticalBlockBorderWrapper"]{border-radius:12px}
+  [data-testid="stVerticalBlockBorderWrapper"] > div{padding:12px !important}
+  .gwb-note{padding:.75rem .85rem;font-size:.92rem}
+  [data-testid="stCaptionContainer"] p{font-size:.8rem;line-height:1.35}
+  /* the last control on a page must clear the fixed letters-home button */
+  [data-testid="stMainBlockContainer"], .block-container{padding-bottom:74px !important}
+}
+</style>
+"""
+
+# ---- one identity everywhere: the PROMETHEUS LAB skin (looks only, no logic) ----
+st.markdown(_GAME_SKIN, unsafe_allow_html=True)
+
+
+def full_bleed(bottom: str = "1rem", phone_bottom: str = "58px"):
+    """Strip Streamlit chrome so a 3D scene IS the screen.
+
+    On a phone it also keeps a clear strip along the bottom of the page: the
+    letters-home button is fixed to that corner, and without the strip it lands
+    on top of whatever control happens to end the page. Stages whose scene runs
+    to the bottom edge pass phone_bottom="0" and reserve the corner inside the
+    scene instead.
+    """
+    st.markdown(f"""<style>
+      [data-testid="stHeader"]{{display:none}}
+      [data-testid="stMainBlockContainer"], .block-container{{
+        padding:0 0 {bottom} 0 !important; max-width:100% !important}}
+      [data-testid="stAppViewContainer"]{{background:#0b0710}}
+      [data-testid="stElementContainer"]:has(iframe){{width:100% !important}}
+      @media (max-width:700px){{
+        [data-testid="stMainBlockContainer"], .block-container{{
+          padding:0 0 {phone_bottom} 0 !important}}
+      }}
+    </style>""", unsafe_allow_html=True)
+
+
+def _inline_md(s: str) -> str:
+    """Render **bold** / *italic* as HTML inside our note boxes (raw HTML doesn't
+    process markdown). The italic rule ignores '2 * 3' (asterisks hugging text
+    only), so multiplication is never mistaken for emphasis."""
+    s = re.sub(r"\*\*(\S(?:.*?\S)?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<![\*\w])\*(?!\s)([^*]+?)(?<!\s)\*(?![\*\w])", r"<em>\1</em>", s)
+    return s
+
+
+def note(label: str, body: str):
+    st.markdown(
+        f'<div class="gwb-note"><span class="label">{label}</span>{_inline_md(body)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+_FRAC = re.compile(r"(?<![\w.$])(\d+)\s*/\s*(\d+)(?![\w.])")
+_SUPD = str.maketrans("0123456789", "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079")
+_POW = re.compile(r"\b(\d+|[a-wyzA-Z])\s+to\s+the\s+power\s+(?:of\s+)?(negative\s+)?(\d+)\b", re.I)
+_SQ = re.compile(r"\b(\d+|[a-wyzA-Z])\s+squared\b", re.I)
+_CU = re.compile(r"\b(\d+|[a-wyzA-Z])\s+cubed\b", re.I)
+
+
+def esc_note(text) -> str:
+    """esc() for note boxes. Notes are raw HTML, so markdown/KaTeX never runs
+    there: keep fractions plain (3/7), convert wordy powers to unicode, and
+    HTML-escape the rest so model output can never break the box."""
+    t = plainify(str(text))
+    t = _POW.sub(lambda m: m.group(1) + ("⁻" if m.group(2) else "")
+                 + m.group(3).translate(_SUPD), t)
+    t = _SQ.sub(lambda m: m.group(1) + "²", t)
+    t = _CU.sub(lambda m: m.group(1) + "³", t)
+    return _hescape(t, quote=False)
+
+
+_STEP_SPLIT = re.compile(r"(?<=[.;])\s+(?=[A-Z(√\d])")
+# the trailing "(A does this... B does that...)" wrong-answer commentary
+_TRAP_SPLIT = re.compile(r"\s*\((?=[A-F][ ,)])(.*)\)\s*$", re.S)
+_TRAP_ITEM = re.compile(r"(?<=[.)])\s+(?=[A-F]\s)")
+
+
+def solution_md(item) -> str:
+    """A worked solution as the student should read it: numbered steps, then a
+    separate block naming each wrong answer and the thinking behind it. The
+    bank stores those notes as a list keyed to the ANSWER TEXT, not the option
+    letter, so they stay true when option order is randomised."""
+    if not isinstance(item, dict):
+        return steps_md(item)
+    out = steps_md(item.get("solution", ""))
+    traps = [t for t in (item.get("traps") or []) if t]
+    if traps:
+        out += ("\n\n**Why the other answers are traps**\n\n"
+                + "\n".join(f"- {esc(plainify(str(t)))}" for t in traps))
+    return out
+
+
+def steps_md(text) -> str:
+    """Render a worked solution as numbered steps instead of one dense
+    paragraph. Splits on sentence boundaries (decimals are safe: a digit
+    after '. ' only splits when it starts a new sentence-like chunk).
+
+    Bank solutions end with a parenthetical explaining each wrong option;
+    that is a different kind of reading, so it gets its own bulleted block
+    instead of being chopped into steps with a dangling bracket."""
+    t = esc(plainify(str(text)))
+    traps = ""
+    m = _TRAP_SPLIT.search(t)
+    if m:
+        traps, t = m.group(1).strip(), t[:m.start()].strip()
+
+    parts = [p.strip() for p in _STEP_SPLIT.split(t) if p.strip()]
+    out = t if len(parts) <= 1 else "\n".join(f"{i}. {p}" for i, p in enumerate(parts, 1))
+
+    if traps:
+        items = [i.strip() for i in _TRAP_ITEM.split(traps) if i.strip()]
+        out += ("\n\n**Why the other answers are traps**\n\n"
+                + "\n".join(f"- {i}" for i in items))
+    return out
+
+
+def esc(text) -> str:
+    """Prepare text for display: (1) escape currency '$' so $3.60 shows literally
+    instead of the run between two '$' rendering as LaTeX; (2) turn plain integer
+    fractions like 3/7 into proper stacked fractions via KaTeX. Decimals and
+    money (3.60 / 1.5, $3.60) are left alone by the fraction rule."""
+    t = str(text).replace("$", "\\$")                 # currency first
+    t = _POW.sub(lambda m: m.group(1) + ("\u207b" if m.group(2) else "")
+                 + m.group(3).translate(_SUPD), t)   # 2 to the power 6 -> 2\u2076
+    t = _SQ.sub(lambda m: m.group(1) + "\u00b2", t)
+    t = _CU.sub(lambda m: m.group(1) + "\u00b3", t)
+    t = _FRAC.sub(r"$\\frac{\1}{\2}$", t)             # 3/7 -> stacked fraction
+    return t
+
+
+def pick_quiz(strand: str, n: int) -> list:
+    pool = QUESTIONS if strand == "Mixed" else [q for q in QUESTIONS if q["strand"] == strand]
+    return pool[:n]
+
+
+def scroll_to_top(token: str):
+    """Put a new screen at its top.
+
+    Streamlit keeps the scroll position across a rerun, so submitting a quiz
+    from the bottom of a five-question page left the player staring at the
+    footer while the battle report sat above them. Fires once per token, so
+    opening an expander or pressing a button on the same screen does not yank
+    the page back up under the player's hands.
+    """
+    if st.session_state.get("_scrolled") == token:
+        return
+    st.session_state._scrolled = token
+    # Streamlit reserves a block for every component, so even a zero-height one
+    # leaves a dark band at the top of the page until something repaints it.
+    # Collapsed to nothing here, and still allowed to run its script.
+    st.markdown('<style>[class*="st-key-scrollfix"]{position:absolute;'
+                'height:0;min-height:0;margin:0;padding:0;overflow:hidden;'
+                'opacity:0;pointer-events:none}</style>',
+                unsafe_allow_html=True)
+    with st.container(key=f"scrollfix_{abs(hash(token)) % 100000}"):
+        components.html(
+            "<script>(function(){try{var d=window.parent.document;"
+            "window.parent.scrollTo({top:0,behavior:'instant'});"
+            "['section.main','[data-testid=\"stAppViewContainer\"]',"
+            "'[data-testid=\"stMain\"]','.main'].forEach(function(s){"
+            "var el=d.querySelector(s); if(el&&el.scrollTo) el.scrollTo(0,0);});"
+            "}catch(e){}})();</script>", height=0)
+
+
+def clear_battle_artifacts():
+    """A new battle inherits nothing from the last one. These are all derived
+    from a specific quiz, so leaving them behind shows the previous fight's
+    study guide under the new monster's banner."""
+    for k in ("guides", "teacher_report", "escal_report", "msession", "mcheck",
+              "mlesson", "mlesson_why", "mfeedback", "mtranscript",
+              "hunt_pick", "progress_view", "progress_sig", "fight_shown"):
+        st.session_state.pop(k, None)
+
+
+def reset():
+    for k in ("quiz", "answers", "mastered"):
+        st.session_state.pop(k, None)
+    clear_battle_artifacts()
+    # Do NOT drop "stage": popping it fell through to the default, which is the
+    # first-run introduction, so "Take another quiz" threw the player out of the
+    # game entirely.
+    st.session_state.stage = "map" if st.session_state.get("adventure") else "intro"
+
+
+def start_mastery(result, analysis):
+    """Enter the autonomous practice loop, targeting the priority snare."""
+    pid = analysis["priority"]["id"]
+    seed = next(w for w in result["wrong"]
+                if w["trick"] and w["trick"].get("id") == pid)
+    s = m.MasterySession(
+        trick_id=pid,
+        trick_name=analysis["priority"]["name"],
+        strand=seed["item"]["strand"],
+        seed_question=seed["item"]["question"],
+        seed_solution=seed["item"].get("solution", ""),
+        seed_chosen=seed.get("chosen_text") or seed.get("chosen", ""),
+        seed_correct=next((o["text"] for o in seed["item"]["options"]
+                           if o.get("is_correct")), ""),
+        topic=seed["item"].get("topic", ""),
+        used_item_ids=[q["id"] for q in st.session_state.quiz],
+    )
+    st.session_state.msession = s
+    with st.spinner("The agent is preparing your first lesson..."):
+        st.session_state.mlesson = m.teach(s)
+        st.session_state.mcheck = m.next_check(s, QUESTIONS)
+    st.session_state.mlesson_why = ("Starting with the most direct explanation of the "
+                                    "mistake — the quickest path to seeing it.")
+    st.session_state.mfeedback = None
+    st.session_state.stage = "mastery"
+
+
+# ---------------- INTRO ----------------
+def intro():
+    st.markdown('<div class="gwb-kicker">Grade 9 EQAO Mathematics · Simple mode</div>', unsafe_allow_html=True)
+    st.title("PROMETHEUS LAB")
+    st.caption("Simple mode — same brain, no monsters underfoot. Runs privately on device.")
+    st.write(
+        "Take a short quiz. When you submit, the agent identifies why you missed "
+        "what you missed, teaches you past each snare, and gives you a fresh "
+        "question to confirm you understand."
+    )
+    col1, col2 = st.columns(2)
+    strand = col1.selectbox("Topic", ["Mixed"] + STRANDS)
+    n = col2.slider("Questions", 3, 8, 5)
+    if st.button("Start quiz"):
+        st.session_state.stage = "quiz"
+        clear_battle_artifacts()
+        st.session_state.quiz = pick_quiz(strand, n)
+        st.session_state.answers = {}
+        st.rerun()
+
+    st.divider()
+    st.caption("Rather play than scroll?")
+    if st.button("Back to PROMETHEUS Lab", type="primary"):
+        st.session_state.adventure = True
+        st.session_state.stage = "map" if st.session_state.get("onboarded") else "onboard"
+        st.rerun()
+    if load_letters():
+        st.button("For mum and dad", key="letters_intro", on_click=to_parents,
+                  help="Every note the agent has written for your parents this session")
+
+
+# ---------------- PROMETHEUS LAB (optional, additive game layer) ----------------
+# Every unit is guarded by a monster — a personified snare. The hub
+# is a 3D nexus (three.js, bloom). Clicking a monster shows its game card; Begin
+# enters that unit's real quiz via ?station=. Deliberately NOT the app's clean
+# design language — it's a different world.
+MONSTERS = {
+    "Number": {
+        "monster": "Fractis", "taunt": "Ready to watch you crumble like a bad fraction.", "lines": ["So... {name}. You found my shard field.", "Braver visitors than you have left here counting on their fingers, {name}.", "Show me your fractions - or become part of my collection.", "And {name}... fail too often in the training grounds, and HE notices. Even I go quiet when the Collector passes."], "clip_ambient": "CharacterArmature|Idle", "clip_fight": "CharacterArmature|Bite_Front", "sp_ambient": 0.8, "sp_fight": 0.65, "ns": 0.9, "color": "#ff8a5c", "shape": "shard", "model": "/app/static/monsters/alien.glb",
+        "lore": "Feeds on fractions added straight across. Weak to common denominators."},
+    "Algebra": {
+        "monster": "Equazor", "taunt": "I am ready to watch you lose this battle. Your signs will slip.", "lines": ["Well, well. {name} dares to balance equations with ME watching.", "One slipped sign, {name}, and your answers belong to me.", "I hope you brought more than luck, kid.", "A warning, free of charge: keep failing, and the Collector comes. I don't share my prey with him willingly."], "clip_ambient": "CharacterArmature|Flying_Idle", "clip_fight": "CharacterArmature|Punch", "sp_ambient": 0.9, "sp_fight": 0.7, "ns": 1.0, "color": "#ff6b9d", "shape": "knot", "model": "/app/static/monsters/dragon.glb",
+        "lore": "Twists equations until the signs flip wrong. Weak to balanced moves."},
+    "Data": {
+        "monster": "Statiq", "taunt": "Your answers will drown in my noise.", "lines": ["Splash... {name}, was it? The data here gets... murky.", "Means, medians - it all blurs together down here, {name}.", "Let's see if you can keep your numbers in order. I doubt it.", "Psst... {name}. Lose too often and the water goes cold. That means HE is near. The Collector."], "clip_ambient": "CharacterArmature|Idle", "clip_fight": "CharacterArmature|Punch", "sp_ambient": 0.8, "sp_fight": 0.7, "ns": 1.0, "color": "#35d0c0", "shape": "blob", "model": "/app/static/monsters/fish.glb",
+        "lore": "Blurs means and medians into noise. Weak to ordered data."},
+    "Geometry & Measurement": {
+        "monster": "Polygor", "taunt": "Every angle you pick will be the wrong one, little hero.", "lines": ["Hop hop, {name}. Welcome to my angle hoard.", "Every formula in here is ALMOST right. That's how I catch clever ones like you.", "Draw your diagrams carefully, kid. I feast on sloppy sketches.", "Careful, though. Fail too much and you'll meet something older than me. We call him the Collector. We don't joke about him."], "clip_ambient": "CharacterArmature|Idle", "clip_fight": "CharacterArmature|Punch", "sp_ambient": 0.8, "sp_fight": 0.7, "ns": 1.0, "color": "#a78bfa", "shape": "poly", "model": "/app/static/monsters/frog.glb",
+        "lore": "Hoards angles and stolen area formulas. Weak to a true diagram."},
+    "Financial Literacy": {
+        "lift": 0.38, "monster": "Ledgerling", "taunt": "I collect mistakes - and I charge interest.", "lines": ["Ah, a new account. Name: {name}. Balance: doubtful.", "I skim a little interest off every mistake, {name}. Business is booming.", "Check the math or sign it all away. Your move, kid.", "Oh - and if your debts pile too high, my boss collects them personally. You do NOT want that meeting, {name}."], "clip_ambient": "CharacterArmature|Flying_Idle", "clip_fight": "CharacterArmature|Headbutt", "sp_ambient": 0.9, "sp_fight": 0.7, "ns": 1.0, "color": "#ffd166", "shape": "coin", "model": "/app/static/monsters/demon.glb",
+        "lore": "Skims your interest while you sleep. Weak to a sharp budget."},
+}
+STATIONS = MONSTERS  # router alias: ?station= keys
+
+
+def monster_for(trick_strand):
+    return MONSTERS.get(trick_strand)
+
+
+def monster_svg(color, size):
+    """Tiny original monster mark (blob + eyes) used in the 2D app when a
+    monster 'gets you'. Inline SVG, no assets."""
+    return (f'<svg width="{size}" height="{size}" viewBox="0 0 40 40" '
+            f'style="vertical-align:middle">'
+            f'<path d="M20 3 C31 3 37 12 37 21 C37 32 30 37 20 37 C10 37 3 32 3 21 '
+            f'C3 12 9 3 20 3 Z" fill="{color}"/>'
+            f'<circle cx="14" cy="18" r="4.2" fill="#14101c"/>'
+            f'<circle cx="26" cy="18" r="4.2" fill="#14101c"/>'
+            f'<circle cx="15.4" cy="16.6" r="1.4" fill="#fff"/>'
+            f'<circle cx="27.4" cy="16.6" r="1.4" fill="#fff"/>'
+            f'<path d="M13 28 Q20 33 27 28" stroke="#14101c" stroke-width="2.4" '
+            f'fill="none" stroke-linecap="round"/></svg>')
+
+
+_HUB_TEMPLATE = r"""
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0710;
+    font-family:'Trebuchet MS','Segoe UI',sans-serif;color:#f2e8dc;user-select:none}
+  #canvas-container{position:absolute;inset:0;z-index:1}
+  #canvas-container canvas{filter:saturate(1.06) contrast(1.09) brightness(.96)}
+  #vig{position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse 75% 62% at 50% 42%,transparent 55%,rgba(4,3,8,.55) 82%,rgba(2,2,6,.9) 100%)}
+  #ui{position:absolute;inset:0;z-index:10;pointer-events:none;display:flex;
+    flex-direction:column;justify-content:space-between;padding:28px}
+  header h1{font-size:2.6rem;font-weight:900;letter-spacing:-1px;text-transform:uppercase;
+    background:linear-gradient(135deg,#ffe9d6 25%,#e08d6d 70%,#b98868);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 14px rgba(224,141,109,.55))}
+  header p{color:#b9a794;font-size:.95rem;margin-top:4px;max-width:430px}
+  header{display:flex;justify-content:space-between;align-items:flex-start}
+  .hbtns{display:flex;gap:10px;align-items:center;flex-wrap:nowrap}
+  #herobox, #herobox *, #herotag{pointer-events:auto}
+  #heroname{cursor:text}
+  .hbtn{display:inline-flex;align-items:center;justify-content:center;text-align:center;pointer-events:auto;background:rgba(255,240,225,.06);border:1px solid rgba(255,240,225,.16);
+    color:#d9c6b2;padding:10px 20px;border-radius:24px;cursor:pointer;font-weight:700;
+    text-transform:uppercase;letter-spacing:1px;font-size:.75rem;text-decoration:none;
+    transition:all .25s}
+  .hbtn:hover{background:rgba(255,240,225,.16);color:#fff}
+
+  /* ---- GAME CARD ---- */
+  #card{align-self:flex-end;width:300px;margin-top:auto;margin-bottom:8px;opacity:0;transform:translateY(26px) rotate(1.5deg) scale(.96);
+    transition:all .5s cubic-bezier(.16,1,.3,1);pointer-events:auto;
+    --mc:#e08d6d}
+  #card.active{opacity:1;transform:translateY(0) rotate(0) scale(1)}
+  .cardframe{border-radius:16px;padding:7px;
+    background:linear-gradient(160deg,var(--mc),#241322 55%,var(--mc));
+    box-shadow:0 24px 50px rgba(0,0,0,.85),0 0 34px color-mix(in srgb,var(--mc) 45%,transparent)}
+  .cardinner{border-radius:11px;background:
+      radial-gradient(120% 65% at 50% 0%,color-mix(in srgb,var(--mc) 26%,#160e18) 0%,#160e18 55%),
+      repeating-linear-gradient(45deg,rgba(255,255,255,.02) 0 2px,transparent 2px 6px),#160e18;
+    border:1px solid rgba(255,236,214,.14);padding:0 0 14px 0;overflow:hidden}
+  .unitchip{display:inline-block;margin:12px 0 0 14px;padding:3px 11px;border-radius:4px;
+    background:var(--mc);color:#1a0f14;font-size:.66rem;font-weight:900;letter-spacing:.18em}
+  .mname{font-size:2rem;font-weight:900;letter-spacing:-.5px;text-transform:uppercase;
+    margin:6px 14px 2px;color:#ffefdd;text-shadow:0 0 12px color-mix(in srgb,var(--mc) 70%,transparent)}
+  .mstage{height:132px;margin:8px 14px;border-radius:8px;position:relative;
+    background:radial-gradient(60% 90% at 50% 60%,color-mix(in srgb,var(--mc) 38%,#0d0810),#0d0810);
+    border:1px solid rgba(255,236,214,.12);display:flex;align-items:center;justify-content:center}
+  .mstage svg{filter:drop-shadow(0 0 10px var(--mc))}
+  .lore{font-style:italic;color:#cbb8a4;font-size:.9rem;line-height:1.5;margin:2px 16px 10px;
+    border-left:3px solid var(--mc);padding-left:10px}
+  .stats{display:flex;gap:8px;margin:0 14px 12px}
+  .stat{flex:1;text-align:center;background:rgba(255,236,214,.06);border:1px solid rgba(255,236,214,.1);
+    border-radius:6px;padding:6px 2px;font-size:.62rem;letter-spacing:.12em;color:#d9c6b2}
+  .stat b{display:block;font-size:.95rem;color:#ffefdd;letter-spacing:0}
+  .fight{display:block;margin:0 14px;padding:14px;text-align:center;border-radius:9px;
+    background:linear-gradient(135deg,var(--mc),color-mix(in srgb,var(--mc) 45%,#7a2a3a));
+    color:#1a0f14;font-weight:900;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
+    font-size:.95rem;box-shadow:0 8px 22px color-mix(in srgb,var(--mc) 55%,transparent);
+    transition:transform .15s}
+  .fight:hover{transform:translateY(-2px)}
+  footer{color:#8d7c6b;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase}
+  #banner{background:rgba(8,11,20,.72);backdrop-filter:blur(10px);
+    border:1px solid rgba(226,192,125,.35);border-left:4px solid #e2c07d;
+    border-radius:6px;padding:14px 22px;max-width:520px;
+    box-shadow:0 12px 32px rgba(0,0,0,.7)}
+  #banner h1{font-size:2.1rem;font-weight:900;letter-spacing:.14em;margin:0;
+    background:linear-gradient(135deg,#fff3d8 20%,#e2c07d 60%,#c58f5a);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 14px rgba(226,192,125,.55))}
+  #banner p{color:#cdd5e4;font-size:.85rem;margin:6px 0 0;letter-spacing:.04em;
+    text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+  /* ---- PHONE ----------------------------------------------------------
+     Portrait is the case that matters. The header stops being a row that
+     runs off the edge and becomes a title with a wrapping control strip
+     under it; the card stops being a 300px panel pinned to the right and
+     becomes a sheet across the bottom, tall enough to read and short
+     enough to leave the citadel visible above it. */
+  @media (max-width:700px){
+    #ui{padding:10px 12px 12px}
+    #banner{padding:9px 12px;max-width:100%;border-left-width:3px;border-radius:5px}
+    #banner h1{font-size:1.35rem;letter-spacing:.06em}
+    #banner p{font-size:.8rem;margin:4px 0 0;line-height:1.35}
+    header{display:block}
+    .hbtns{margin-top:8px;flex-wrap:wrap;gap:7px}
+    .hbtn{padding:0 13px;height:44px;line-height:44px;border-radius:22px;
+      font-size:.7rem;letter-spacing:.06em;flex:0 0 auto}
+    #herotag{margin:2px 0 0 2px !important;font-size:.7rem !important;
+      display:block !important;width:100%}
+    /* the bottom strip stays clear for the letters-home button */
+    #card{align-self:stretch;width:100%;margin-bottom:54px}
+    .cardframe{padding:5px;border-radius:14px}
+    .cardinner{padding-bottom:11px}
+    .unitchip{margin:9px 0 0 12px;font-size:.62rem;padding:3px 9px}
+    .mname{font-size:1.45rem;margin:4px 12px 2px}
+    .mstage{height:92px;margin:6px 12px}
+    .lore{font-size:.85rem;line-height:1.4;margin:2px 12px 8px;
+      display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+      overflow:hidden}
+    .stats{margin:0 12px 9px;gap:6px}
+    .stat{font-size:.58rem;padding:5px 1px}
+    .stat b{font-size:.85rem}
+    .fight{margin:0 12px;padding:14px;font-size:.9rem}
+    footer{display:none}
+  }
+  /* Landscape on a phone: keep the card off the middle of the scene. */
+  @media (max-width:900px) and (max-height:460px){
+    #ui{padding:8px 10px}
+    #banner h1{font-size:1.1rem} #banner p{display:none}
+    #card{align-self:flex-end;width:262px}
+    .mstage{height:72px} .lore{display:none}
+  }
+</style>
+<div id="canvas-container"></div>
+<div id="vig"></div>
+<div id="ui">
+  <header>
+    <div id="banner">
+      <h1>PROMETHEUS LAB</h1>
+      <p>Every monster is here to make you forget your math. Defeat them by proving you remember.</p>
+    </div>
+    <div class="hbtns">
+      <button class="hbtn" onclick="resetCamera()">Nexus view</button>
+      <a class="hbtn" target="_top" id="exitlink" href="#">Simple dashboard</a>
+      <a class="hbtn" target="_top" id="parentlink" href="#">For mum and dad</a>
+      <button class="hbtn" id="mutebtn" title="Toggle music and battle sounds">Sound: on</button>
+      <span id="herotag" style="display:none;margin-left:10px;color:#7fe9d6;
+        font-size:.72rem;letter-spacing:.12em;font-weight:700"></span>
+    </div>
+  </header>
+  <div id="card">
+    <div class="cardframe"><div class="cardinner">
+      <span class="unitchip" id="c-unit">UNIT</span>
+      <div class="mname" id="c-name">Monster</div>
+      <div class="mstage" id="c-stage"></div>
+      <p class="lore" id="c-lore">...</p>
+      <div class="stats">
+        <div class="stat">QUESTIONS<b>5</b></div>
+        <div class="stat">GRADE<b>9</b></div>
+        <div class="stat">REWARD<b>MASTERY</b></div>
+      </div>
+      <a class="fight" target="_top" id="c-fight" href="#">Begin challenge &nearr;</a>
+    </div></div>
+  </div>
+  <footer>Click a monster to inspect its card &middot; drag nothing &mdash; the platform turns on its own</footer>
+</div>
+<script>
+(function(){
+  let o='';
+  try{ o = window.parent.location.origin; }
+  catch(e){ try{ o = new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN = o;
+})();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+// The citadel owns the whole phone screen; the relic shelf scrolls under it.
+// On a phone with the tap-to-pick list below, it gives that list room to peek
+// so a thumb never has to guess there is more under a full-screen scene.
+// __FIT_RESERVE__ is 0 on desktop and on a phone that chose "Computer".
+GWB.holdFrame(__FIT_RESERVE__, 420);
+const UNITS = __UNITS__, HERO = __HERO__;
+const NAMES = Object.keys(UNITS);
+let base='/';
+try{ base = window.parent.location.pathname || '/'; }
+catch(e){ try{ base = new URL(document.referrer).pathname || '/'; }catch(_){} }
+// Click a Streamlit button in the parent instead of navigating: this frame is
+// sandboxed without allow-top-navigation, so any href here would have to open a
+// second tab, which splits the experience and leaves this scene's music playing
+// behind it. Same-origin access to the parent IS allowed, so we press its
+// buttons. Returns false if the parent is unreachable, and the caller falls
+// back to a link so the game is never a dead end.
+function relay(key){
+  try{
+    var d = window.parent.document;
+    var b = d.querySelector('.st-key-' + key + ' button');
+    if(b){ b.click(); return true; }
+  }catch(e){}
+  return false;
+}
+function slug(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''); }
+
+(function(){var x=document.getElementById('exitlink');
+  x.href=base+'?exit=1'; x.target='_blank';
+  x.addEventListener('click',function(ev){
+    if(relay('relay_dashboard')){ ev.preventDefault(); } });
+  var p=document.getElementById('parentlink');
+  if(p){ p.target='_blank';
+    p.addEventListener('pointerdown',function(){
+      var h=(HERO||'').trim();
+      this.href=base+'?parents=1'+(h?('&hero='+encodeURIComponent(h)):'');
+    });
+    p.addEventListener('click',function(ev){
+      if(relay('relay_parents')){ ev.preventDefault(); } });
+    p.href=base+'?parents=1'; }})();
+
+let scene,camera,renderer,controls,selected=null;
+const monsters=[],groups=[],stations=[],mixers=[],torchLights=[],animatedPlants=[],
+      ray=new THREE.Raycaster(),mouse=new THREE.Vector2();
+let miniR=null,miniScene=null,miniCam=null,miniMix=null,miniObj=null;
+let loader=null;
+let sealRing=null,sealLight=null;
+let particleGeo=null;
+const PARTICLE_COUNT=250;
+const RING_R=21;
+const HOME={x:0,y:22,z:48},HOME_T={x:0,y:6,z:0};
+const clock=new THREE.Clock();
+// How much the shot has to open up for this viewport. The citadel is the
+// widest subject in the game - five monsters on a ring 42 units across - so a
+// tall narrow window drops them off the sides unless the camera answers it.
+// 1 on a desktop window, so nothing there moves. See GWB.frame.
+let FRAME=1;
+function homePos(){
+  // Step back mostly sideways-and-out, only a little upward: raising the eye by
+  // the full amount would tip the shot down and fill a phone with empty ground.
+  const up=1+(FRAME-1)*0.42;
+  return {x:HOME_T.x+(HOME.x-HOME_T.x)*FRAME,
+          y:HOME_T.y+(HOME.y-HOME_T.y)*up,
+          z:HOME_T.z+(HOME.z-HOME_T.z)*FRAME};
+}
+function refit(){
+  camera.aspect=innerWidth/Math.max(innerHeight,1);
+  FRAME=GWB.frame(camera,50,1.55,{power:0.78,maxFov:65,maxDist:1.75});
+  // stepping back would otherwise bury the citadel in its own fog
+  if(scene && scene.fog) scene.fog.density=0.012/FRAME;
+  if(controls){ controls.maxDistance=85*FRAME; controls.minDistance=8*FRAME; }
+  renderer.setSize(innerWidth,innerHeight);
+}
+
+init(); animate();
+
+function createStoneTexture(){
+  const canvas=document.createElement('canvas');
+  canvas.width=512; canvas.height=512;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#2a2d36'; ctx.fillRect(0,0,512,512);
+  ctx.strokeStyle='#14161c'; ctx.lineWidth=4;
+  const rows=16,cols=8,rh=512/rows,cw=512/cols;
+  for(let i=0;i<rows;i++){
+    const y=i*rh;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(512,y); ctx.stroke();
+    const offset=(i%2===0)?0:cw/2;
+    for(let j=0;j<cols+1;j++){
+      const x=j*cw+offset;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+rh); ctx.stroke();
+    }
+  }
+  for(let i=0;i<15000;i++){
+    const x=Math.random()*512,y=Math.random()*512;
+    const shade=Math.floor(Math.random()*40);
+    ctx.fillStyle='rgba('+shade+','+shade+','+shade+',0.15)';
+    ctx.fillRect(x,y,2,2);
+  }
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.wrapS=THREE.RepeatWrapping; texture.wrapT=THREE.RepeatWrapping;
+  return texture;
+}
+
+function init(){
+  const el=document.getElementById('canvas-container');
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0a0f1d);
+  scene.fog=new THREE.FogExp2(0x0d1424,0.012);
+
+  camera=new THREE.PerspectiveCamera(50,innerWidth/Math.max(innerHeight,1),0.1,1000);
+  FRAME=GWB.frame(camera,50,1.55,{power:0.78,maxFov:65,maxDist:1.75});
+  scene.fog.density=0.012/FRAME;
+  const h0=homePos(); camera.position.set(h0.x,h0.y,h0.z);
+
+  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=0.85;
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  el.appendChild(renderer.domElement);
+
+  controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;
+  controls.dampingFactor=0.04;
+  controls.maxPolarAngle=Math.PI/2-0.01;
+  controls.minDistance=8*FRAME;
+  controls.maxDistance=85*FRAME;
+  controls.autoRotate=true;
+  controls.autoRotateSpeed=0.4;
+  controls.target.set(HOME_T.x,HOME_T.y,HOME_T.z);
+  renderer.domElement.addEventListener('pointerdown',function(){ controls.autoRotate=false; });
+
+  // ---- lighting: shadows live on the moonlight only ----
+  scene.add(new THREE.AmbientLight(0x141c30,0.95));
+  const moonLight=new THREE.DirectionalLight(0x9fb6e8,1.25);
+  moonLight.position.set(-35,55,-20);
+  moonLight.castShadow=true;
+  moonLight.shadow.mapSize.width=2048;
+  moonLight.shadow.mapSize.height=2048;
+  moonLight.shadow.camera.near=10;
+  moonLight.shadow.camera.far=120;
+  const d=45;
+  moonLight.shadow.camera.left=-d; moonLight.shadow.camera.right=d;
+  moonLight.shadow.camera.top=d; moonLight.shadow.camera.bottom=-d;
+  scene.add(moonLight);
+  const fillLight=new THREE.DirectionalLight(0x406080,0.6);
+  fillLight.position.set(30,20,30);
+  scene.add(fillLight);
+
+  // ---- materials ----
+  const stoneTex=createStoneTexture(); stoneTex.repeat.set(3,3);
+  const stoneMat=new THREE.MeshStandardMaterial({map:stoneTex,roughness:0.7,metalness:0.2});
+  const darkGroundMat=new THREE.MeshStandardMaterial({color:0x121722,roughness:0.9});
+  const cobblestoneMat=new THREE.MeshStandardMaterial({color:0x1e2433,roughness:0.8});
+  const slateRoofMat=new THREE.MeshStandardMaterial({color:0x182030,roughness:0.5,metalness:0.3});
+  const darkWoodMat=new THREE.MeshStandardMaterial({color:0x2b1e16,roughness:0.8});
+  const darkPineMat=new THREE.MeshStandardMaterial({color:0x122218,roughness:0.8});
+
+  // ---- terrain and courtyard ----
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(160,160,32,32),darkGroundMat);
+  ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+  const courtyard=new THREE.Mesh(new THREE.CylinderGeometry(15,16,0.15,24),cobblestoneMat);
+  courtyard.position.set(0,0.08,0); courtyard.receiveShadow=true; scene.add(courtyard);
+
+  // ---- castle: the sealed citadel ----
+  const castleGroup=new THREE.Group();
+  const mainKeep=new THREE.Mesh(new THREE.BoxGeometry(11,15,11),stoneMat);
+  mainKeep.position.set(0,7.5,-2); mainKeep.castShadow=true; mainKeep.receiveShadow=true;
+  castleGroup.add(mainKeep);
+  const mainRoof=new THREE.Mesh(new THREE.ConeGeometry(8.5,6,4),slateRoofMat);
+  mainRoof.position.set(0,18,-2); mainRoof.rotation.y=Math.PI/4; mainRoof.castShadow=true;
+  castleGroup.add(mainRoof);
+  const gateFrame=new THREE.Mesh(new THREE.BoxGeometry(4.5,5.5,0.8),stoneMat);
+  gateFrame.position.set(0,2.75,3.6); gateFrame.castShadow=true; castleGroup.add(gateFrame);
+  const woodenDoor=new THREE.Mesh(new THREE.BoxGeometry(3.2,4.5,0.3),darkWoodMat);
+  woodenDoor.position.set(0,2.25,3.8); woodenDoor.castShadow=true; castleGroup.add(woodenDoor);
+  const towerPos=[{x:-11,z:-11},{x:11,z:-11},{x:-11,z:9},{x:11,z:9}];
+  towerPos.forEach(p=>{
+    const tower=new THREE.Mesh(new THREE.CylinderGeometry(2.8,3.2,14,16),stoneMat);
+    tower.position.set(p.x,7,p.z); tower.castShadow=true; tower.receiveShadow=true;
+    castleGroup.add(tower);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(3.6,5.5,16),slateRoofMat);
+    roof.position.set(p.x,16.75,p.z); roof.castShadow=true; castleGroup.add(roof);
+  });
+  const wall1=new THREE.Mesh(new THREE.BoxGeometry(18,9,2.2),stoneMat);
+  wall1.position.set(0,4.5,-11); wall1.castShadow=true; castleGroup.add(wall1);
+  const wall2=new THREE.Mesh(new THREE.BoxGeometry(2.2,9,18),stoneMat);
+  wall2.position.set(-11,4.5,-1); wall2.castShadow=true; castleGroup.add(wall2);
+  const wall3=new THREE.Mesh(new THREE.BoxGeometry(2.2,9,18),stoneMat);
+  wall3.position.set(11,4.5,-1); wall3.castShadow=true; castleGroup.add(wall3);
+  scene.add(castleGroup);
+
+  // story beat: a faint golden seal across the gate. Someone is locked inside.
+  sealRing=new THREE.Mesh(new THREE.TorusGeometry(1.7,0.08,10,48),
+    new THREE.MeshBasicMaterial({color:0xffd87a,transparent:true,opacity:0.55,
+      depthWrite:false,blending:THREE.AdditiveBlending}));
+  sealRing.position.set(0,2.4,4.05); scene.add(sealRing);
+  const sealBar1=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.09,0.04),
+    new THREE.MeshBasicMaterial({color:0xffd87a,transparent:true,opacity:0.4,
+      depthWrite:false,blending:THREE.AdditiveBlending}));
+  sealBar1.position.set(0,2.4,4.03); sealBar1.rotation.z=Math.PI/4; scene.add(sealBar1);
+  const sealBar2=sealBar1.clone(); sealBar2.rotation.z=-Math.PI/4; scene.add(sealBar2);
+  sealLight=new THREE.PointLight(0xffd87a,1.4,10);
+  sealLight.position.set(0,2.6,5.0); scene.add(sealLight);
+
+  // gate torches
+  function createGateTorch(x,y,z){
+    const torchLight=new THREE.PointLight(0xff8800,2.2,12);
+    torchLight.position.set(x,y,z);
+    scene.add(torchLight);
+    torchLights.push({light:torchLight,baseIntensity:2.2});
+  }
+  createGateTorch(-2.2,3.5,4.2);
+  createGateTorch(2.2,3.5,4.2);
+
+  // ---- star / nebula dome, very dark blue ----
+  (function(){
+    const c=document.createElement('canvas'); c.width=1024; c.height=512;
+    const g2=c.getContext('2d');
+    const gr=g2.createLinearGradient(0,0,0,512);
+    gr.addColorStop(0,'#0b1226'); gr.addColorStop(0.5,'#080d1c');
+    gr.addColorStop(1,'#060a14');
+    g2.fillStyle=gr; g2.fillRect(0,0,1024,512);
+    for(let i=0;i<20;i++){
+      const x=Math.random()*1024,y=Math.random()*300,r2=40+Math.random()*90;
+      const ng=g2.createRadialGradient(x,y,4,x,y,r2);
+      ng.addColorStop(0,'rgba(60,90,160,0.08)');
+      ng.addColorStop(1,'rgba(0,0,0,0)');
+      g2.fillStyle=ng; g2.beginPath(); g2.arc(x,y,r2,0,7); g2.fill();
+    }
+    for(let i=0;i<520;i++){
+      const x=Math.random()*1024,y=Math.random()*400,r2=Math.random()*1.2+0.2;
+      g2.fillStyle='rgba('+(190+Math.random()*65|0)+','+(200+Math.random()*55|0)+',255,'
+        +(Math.random()*0.5+0.1)+')';
+      g2.beginPath(); g2.arc(x,y,r2,0,7); g2.fill();
+    }
+    const tex=new THREE.CanvasTexture(c);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(140,32,20),
+      new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,fog:false}));
+    scene.add(dome);
+    gsap.to(dome.rotation,{y:Math.PI*2,duration:600,repeat:-1,ease:'none'});
+  })();
+
+  // ---- dense dark pine forest ring ----
+  const forestGroup=new THREE.Group();
+  function createDarkPine(x,z,scale){
+    const tree=new THREE.Group();
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.3*scale,0.5*scale,3*scale,8),darkWoodMat);
+    trunk.position.y=1.5*scale; trunk.castShadow=true; tree.add(trunk);
+    for(let i=0;i<4;i++){
+      const foliage=new THREE.Mesh(
+        new THREE.ConeGeometry((2.8-i*0.5)*scale,(3.2-i*0.4)*scale,8),darkPineMat);
+      foliage.position.y=(2.8+i*1.6)*scale;
+      foliage.castShadow=true;
+      tree.add(foliage);
+    }
+    tree.position.set(x,0,z);
+    return tree;
+  }
+  const treeCoords=[
+    [-33,25],[-36,-12],[-28,-29],[33,25],[37,-8],[30,-28],
+    [-41,30],[36,36],[-22,39],[22,41],[-43,-5],[41,-20],
+    [-30,-39],[30,-39],[0,-43],[-14,-42],[14,-44],[44,8],[-45,12],
+    [8,46],[-8,45],[46,-32],[-46,-30],[40,40],[-40,42]
+  ];
+  treeCoords.forEach(c=>{
+    forestGroup.add(createDarkPine(c[0],c[1],0.9+Math.random()*0.6));
+  });
+  scene.add(forestGroup);
+
+  // ---- 5 elemental floating platforms, one per unit, ring radius RING_R ----
+  loader=(typeof THREE.GLTFLoader!=='undefined')?new THREE.GLTFLoader():null;
+  NAMES.forEach((name,i)=>{
+    const u=UNITS[name], col=new THREE.Color(u.color);
+    const ang=(i/NAMES.length)*Math.PI*2;
+    const x=Math.cos(ang)*RING_R, z=Math.sin(ang)*RING_R;
+
+    const platformGroup=new THREE.Group();
+    platformGroup.userData={gi:i};
+    groups.push(platformGroup);
+
+    // tiered floating stone base
+    const base1=new THREE.Mesh(new THREE.CylinderGeometry(3.2,2.6,0.7,12),stoneMat);
+    base1.position.y=0; base1.castShadow=true; base1.receiveShadow=true;
+    platformGroup.add(base1);
+    const base2=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.8,0.4,12),cobblestoneMat);
+    base2.position.y=0.55; base2.castShadow=true; base2.receiveShadow=true;
+    platformGroup.add(base2);
+
+    // glowing rune ring in the unit's color
+    const runeMat=new THREE.MeshBasicMaterial({color:col,side:THREE.DoubleSide,
+      transparent:true,opacity:0.85});
+    const ring=new THREE.Mesh(new THREE.RingGeometry(2.0,2.25,32),runeMat);
+    ring.rotation.x=-Math.PI/2; ring.position.y=0.76;
+    platformGroup.add(ring);
+
+    // torch pillar with a small flame in the unit's color
+    const torchPillar=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.25,1.8,8),darkWoodMat);
+    torchPillar.position.set(2.2,1.3,0); torchPillar.castShadow=true;
+    platformGroup.add(torchPillar);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.55,8),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.9}));
+    flame.position.set(2.2,2.45,0); platformGroup.add(flame);
+    const torchLight=new THREE.PointLight(col,2.2,12);
+    torchLight.position.set(2.2,2.3,0);
+    platformGroup.add(torchLight);
+    torchLights.push({light:torchLight,baseIntensity:2.2});
+
+    // pulsing underglow light and core disk
+    const underLight=new THREE.PointLight(col,3.5,14);
+    underLight.position.set(0,-0.4,0);
+    platformGroup.add(underLight);
+    const glowDiskMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.85});
+    const glowDisk=new THREE.Mesh(new THREE.CylinderGeometry(2.2,0.5,0.2,16),glowDiskMat);
+    glowDisk.position.y=-0.45; platformGroup.add(glowDisk);
+
+    const baseY=2.0;
+    platformGroup.position.set(x,baseY,z);
+    scene.add(platformGroup);
+
+    // bioluminescent plant cluster on the ground beneath, same color
+    const plantGroup=new THREE.Group();
+    plantGroup.position.set(x,0,z);
+    const plantMat=new THREE.MeshStandardMaterial({color:col,roughness:0.3,
+      emissive:col,emissiveIntensity:0.6});
+    for(let k=0;k<9;k++){
+      const pang=(k/9)*Math.PI*2+Math.random()*0.5;
+      const dist=1.2+Math.random()*2.2;
+      const px=Math.cos(pang)*dist, pz=Math.sin(pang)*dist;
+      const plantHeight=0.8+Math.random()*1.2;
+      const stem=new THREE.Mesh(new THREE.ConeGeometry(0.18,plantHeight,5),plantMat);
+      stem.position.set(px,plantHeight/2,pz);
+      stem.rotation.x=(Math.random()-0.5)*0.4;
+      stem.rotation.z=(Math.random()-0.5)*0.4;
+      stem.castShadow=true;
+      plantGroup.add(stem);
+      const tip=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),
+        new THREE.MeshBasicMaterial({color:col}));
+      tip.position.set(px,plantHeight,pz);
+      plantGroup.add(tip);
+      animatedPlants.push({mesh:stem,baseRotZ:stem.rotation.z,offset:k+i});
+    }
+    scene.add(plantGroup);
+
+    // the monster standing on top
+    const holder=new THREE.Group();
+    holder.position.y=0.98;
+    holder.userData={i:i};
+    platformGroup.add(holder);
+    monsters.push(holder);
+    const fallback=()=>{
+      const m=makeMonster(u.shape,col); m.position.y=1.5;
+      m.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+      holder.add(m);
+    };
+    if(loader && u.model){
+      loader.load((window.__ORIGIN||'')+u.model,(gltf)=>{
+        const obj=gltf.scene;
+        const box=new THREE.Box3().setFromObject(obj);
+        const size=box.getSize(new THREE.Vector3());
+        const eff=Math.max(size.y, 0.62*Math.max(size.x,size.z), 0.001);
+        const scale=(3.9*(u.ns||1))/eff;  // blended height/width metric - fair for fliers and bipeds
+        obj.scale.setScalar(scale);
+        const box2=new THREE.Box3().setFromObject(obj);
+        const c=box2.getCenter(new THREE.Vector3());
+        obj.position.x-=c.x; obj.position.z-=c.z; obj.position.y-=box2.min.y;
+        obj.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+        holder.add(obj);
+        if(gltf.animations && gltf.animations.length){
+          const mix=new THREE.AnimationMixer(obj);
+          const idle=gltf.animations.find(a=>a.name===u.clipA)
+                   ||gltf.animations.find(a=>/idle/i.test(a.name))||gltf.animations[0];
+          const act=mix.clipAction(idle); act.timeScale=(u.spA||0.8); act.play();
+          mixers.push(mix);
+        }
+      },undefined,fallback);
+    } else fallback();
+
+    // generous invisible hit volume - clicking anywhere near the beast counts
+    const hitVol=new THREE.Mesh(new THREE.CylinderGeometry(4.8,4.8,10,10),
+      new THREE.MeshBasicMaterial({transparent:true,opacity:0.0,depthWrite:false}));
+    hitVol.position.y=4; hitVol.userData.gi=i; platformGroup.add(hitVol);
+
+    stations.push({group:platformGroup,holder:holder,ring:ring,underLight:underLight,
+      glowDiskMat:glowDiskMat,baseY:baseY,phaseOffset:i*1.25,ang:ang,x:x,z:z});
+  });
+
+  // ---- rising embers ----
+  particleGeo=new THREE.BufferGeometry();
+  const particlePos=new Float32Array(PARTICLE_COUNT*3);
+  for(let i=0;i<PARTICLE_COUNT;i++){
+    particlePos[i*3]=(Math.random()-0.5)*60;
+    particlePos[i*3+1]=Math.random()*20;
+    particlePos[i*3+2]=(Math.random()-0.5)*60;
+  }
+  particleGeo.setAttribute('position',new THREE.BufferAttribute(particlePos,3));
+  const embers=new THREE.Points(particleGeo,new THREE.PointsMaterial({
+    color:0xffcc55,size:0.2,transparent:true,opacity:0.75,
+    blending:THREE.AdditiveBlending,depthWrite:false}));
+  scene.add(embers);
+
+  addEventListener('resize',refit);
+  renderer.domElement.addEventListener('click',onClick);
+}
+
+function makeMonster(shape,col){
+  const mat=new THREE.MeshStandardMaterial({color:col,metalness:.8,roughness:.12,flatShading:true});
+  const wire=new THREE.MeshBasicMaterial({color:0xfff1e2,wireframe:true,transparent:true,opacity:.35});
+  let m,w;
+  if(shape==='shard'){m=new THREE.Mesh(new THREE.OctahedronGeometry(1.5,0),mat);m.scale.y=2;
+    w=new THREE.Mesh(new THREE.OctahedronGeometry(1.62,0),wire);w.scale.y=2;}
+  else if(shape==='knot'){m=new THREE.Mesh(new THREE.TorusKnotGeometry(.8,.3,100,16),mat);
+    w=new THREE.Mesh(new THREE.TorusKnotGeometry(.85,.32,100,16),wire);}
+  else if(shape==='blob'){m=new THREE.Mesh(new THREE.IcosahedronGeometry(1.4,2),mat);
+    w=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5,2),wire);}
+  else if(shape==='poly'){m=new THREE.Mesh(new THREE.DodecahedronGeometry(1.5,0),mat);
+    w=new THREE.Mesh(new THREE.DodecahedronGeometry(1.62,0),wire);}
+  else {m=new THREE.Mesh(new THREE.TorusGeometry(1.2,.42,16,50),mat);m.rotateX(Math.PI/2);
+    w=new THREE.Mesh(new THREE.TorusGeometry(1.25,.46,16,50),wire);w.rotateX(Math.PI/2);}
+  const g=new THREE.Group(); g.add(m); g.add(w);
+  // eyes so it reads as a creature
+  for(const sx of [-0.45,0.45]){
+    const eye=new THREE.Group();
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(.19,12,12),
+      new THREE.MeshBasicMaterial({color:0xfff6ec}));
+    const pup=new THREE.Mesh(new THREE.SphereGeometry(.09,10,10),
+      new THREE.MeshBasicMaterial({color:0x14101c}));
+    pup.position.z=.13; eye.add(ball); eye.add(pup);
+    eye.position.set(sx,.35,1.35); g.add(eye);
+  }
+  return g;
+}
+
+// ---- the card's glass pane: a live close-up of the monster walking toward you ----
+function ensureMini(){
+  if(miniR) return;
+  const stage=document.getElementById('c-stage');
+  miniR=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  stage.innerHTML=''; stage.appendChild(miniR.domElement);
+  miniScene=new THREE.Scene();
+  miniCam=new THREE.PerspectiveCamera(40,2,0.1,50);
+  miniCam.position.set(0,1.6,3.6); miniCam.lookAt(0,1.15,0);
+  miniScene.add(new THREE.AmbientLight(0xffffff,0.95));
+  const sp=new THREE.SpotLight(0xfff3e0,2.6,30,Math.PI/4,0.5);
+  sp.position.set(0,6,3); miniScene.add(sp);
+}
+function showMini(name){
+  const u=UNITS[name]; ensureMini();
+  const stage=document.getElementById('c-stage');
+  // the pane is shorter on a phone; read it rather than assume the desktop 132
+  const wpx=Math.max(stage.clientWidth,200), hpx=Math.max(stage.clientHeight,80);
+  miniR.outputEncoding=THREE.sRGBEncoding; miniR.setSize(wpx,hpx);
+  miniCam.aspect=wpx/hpx; miniCam.updateProjectionMatrix();
+  if(miniObj){ miniScene.remove(miniObj); miniObj=null; } miniMix=null;
+  if(loader && u.model){
+    loader.load((window.__ORIGIN||'')+u.model,(gltf)=>{
+      const obj=gltf.scene;
+      const box=new THREE.Box3().setFromObject(obj);
+      const size=box.getSize(new THREE.Vector3());
+      const sc=3.0/Math.max(size.x,size.y,size.z,0.001); obj.scale.setScalar(sc);
+      const b2=new THREE.Box3().setFromObject(obj);
+      const c=b2.getCenter(new THREE.Vector3());
+      obj.position.set(-c.x,-b2.min.y,-c.z);
+      obj.userData.t0=performance.now();
+      miniScene.add(obj); miniObj=obj;
+      if(gltf.animations&&gltf.animations.length){
+        miniMix=new THREE.AnimationMixer(obj);
+        const clip=gltf.animations.find(a=>a.name===u.clipA)
+                 ||gltf.animations.find(a=>/idle/i.test(a.name))
+                 ||gltf.animations[0];
+        const act=miniMix.clipAction(clip);
+        act.timeScale=(u.spA||0.8)*0.85;   // calm, menacing - never frantic
+        act.play();
+      }
+    });
+  }
+}
+
+function svgMini(col){
+  return '<svg width="72" height="72" viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="'+col+'" opacity="0.85"/><circle cx="20" cy="20" r="17" fill="none" stroke="'+col+'" stroke-width="1.4" opacity="0.5"/></svg>';
+}
+
+let __downXY=null;
+addEventListener('pointerdown',e=>{ __downXY=[e.clientX,e.clientY]; });
+
+function stationAtPointer(e){
+  mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(groups,true);
+  if(hit.length){
+    let o=hit[0].object;
+    while(o.parent && o.userData.gi===undefined) o=o.parent;
+    if(o.userData.gi!==undefined) return o.userData.gi;
+  }
+  // fallback: nearest station within 70px on screen
+  let best=-1,bd=70;
+  const v=new THREE.Vector3();
+  stations.forEach((st2,i2)=>{
+    st2.holder.getWorldPosition(v); v.project(camera);
+    const sx=(v.x+1)/2*innerWidth, sy=(-v.y+1)/2*innerHeight;
+    const d=Math.hypot(sx-e.clientX, sy-e.clientY);
+    if(v.z<1 && d<bd){ bd=d; best=i2; }
+  });
+  return best>=0 ? best : undefined;
+}
+
+function onClick(e){
+  if(e.target.closest && e.target.closest('#ui a, #ui button, #card, input')) return;
+  if(__downXY && Math.hypot(e.clientX-__downXY[0], e.clientY-__downXY[1])>7) return; // was a drag
+  const gi=stationAtPointer(e);
+  if(gi!==undefined) focus(gi);
+}
+
+addEventListener('pointermove',(function(){
+  let cool=false;
+  return function(e){
+    if(cool) return; cool=true; setTimeout(()=>cool=false,120);
+    if(!renderer) return;
+    const gi=stationAtPointer(e);
+    renderer.domElement.style.cursor = (gi!==undefined) ? 'pointer' : 'default';
+  };
+})());
+
+function focus(i){
+  if(selected===i) return; selected=i;
+  const name=NAMES[i], u=UNITS[name];
+  const st=stations[i], ang=st.ang;
+  controls.autoRotate=false;
+  // Vantage: outside the ring, slightly above, looking at the monster. On a
+  // phone the card is a sheet across the bottom, so aim below the monster -
+  // it rides in the clear upper half instead of behind its own card.
+  const ph=GWB.isPhone();
+  // A phone's field of view is much wider, so the same standoff would leave the
+  // monster a speck: close in, drop the eye almost to its level, and aim just
+  // under it so it rides above the card instead of behind it.
+  const OUT=RING_R+(ph?9:12), camY=ph?6.0:8.5;
+  const aim=st.baseY+(ph?0.6:2.0);
+  gsap.to(camera.position,{
+    x:Math.cos(ang)*OUT, y:camY, z:Math.sin(ang)*OUT,
+    duration:1.8, ease:'power3.inOut'});
+  gsap.to(controls.target,{
+    x:st.x, y:aim, z:st.z,
+    duration:1.8, ease:'power3.inOut'});
+  // turn the monster to face the camera
+  gsap.to(st.holder.rotation,{y:Math.PI/2-ang,duration:0.9,ease:'power2.out'});
+  const card=document.getElementById('card');
+  card.style.setProperty('--mc',u.color);
+  document.getElementById('c-unit').textContent=name.toUpperCase()+' UNIT';
+  document.getElementById('c-name').textContent=u.monster;
+  document.getElementById('c-lore').textContent='"'+u.lore+'"';
+  try{ showMini(name); }catch(e){ document.getElementById('c-stage').innerHTML=svgMini(u.color); }
+  const fbtn=document.getElementById('c-fight');
+  fbtn.onclick=null;
+  const hero=(HERO||'').trim();
+  fbtn.href=base+'?station='+encodeURIComponent(name)
+           +(hero?'&hero='+encodeURIComponent(hero):'');
+  fbtn.target='_blank'; fbtn.rel='opener';
+  fbtn.dataset.station = name;
+  card.classList.add('active');
+}
+
+function resetCamera(){
+  selected=null; document.getElementById('card').classList.remove('active');
+  const h=homePos();
+  gsap.to(camera.position,{x:h.x,y:h.y,z:h.z,duration:1.8,ease:'power2.inOut'});
+  gsap.to(controls.target,{x:HOME_T.x,y:HOME_T.y,z:HOME_T.z,duration:1.8,ease:'power2.inOut',
+    onComplete:()=>{ controls.autoRotate=true; }});
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.05,clock.getDelta());
+  const time=clock.getElapsedTime();
+
+  mixers.forEach(m=>m.update(dt));
+
+  // torch flicker (gate torches + platform torches)
+  torchLights.forEach((t,i)=>{
+    t.light.intensity=t.baseIntensity+Math.sin(time*12+i)*0.4+(Math.random()-0.5)*0.3;
+  });
+
+  // hover bob, pulsing underglow, spinning rune rings
+  stations.forEach((p)=>{
+    const hoverOffset=Math.sin(time*2.0+p.phaseOffset)*0.35;
+    p.group.position.y=p.baseY+hoverOffset;
+    const pulse=Math.sin(time*4.0+p.phaseOffset)*0.5+0.5;
+    p.underLight.intensity=2.0+pulse*2.5;
+    p.glowDiskMat.opacity=0.5+pulse*0.45;
+    p.ring.rotation.z=time*0.4+p.phaseOffset;
+  });
+
+  // sway bioluminescent plants
+  animatedPlants.forEach((plant)=>{
+    plant.mesh.rotation.z=plant.baseRotZ+Math.sin(time*2.5+plant.offset)*0.08;
+  });
+
+  // gate seal breathes: the citadel is locked from the outside
+  if(sealRing){
+    const sp=Math.sin(time*1.4)*0.5+0.5;
+    sealRing.material.opacity=0.35+sp*0.35;
+    sealRing.rotation.z=time*0.25;
+    sealLight.intensity=1.0+sp*0.9;
+  }
+
+  // rising embers
+  const pArr=particleGeo.attributes.position.array;
+  for(let i=0;i<PARTICLE_COUNT;i++){
+    pArr[i*3+1]+=0.015;
+    if(pArr[i*3+1]>20) pArr[i*3+1]=0;
+  }
+  particleGeo.attributes.position.needsUpdate=true;
+
+  // idle spin for unselected monsters
+  monsters.forEach((m,i)=>{
+    if(selected!==i) m.rotation.y+=0.0035;
+  });
+
+  if(miniMix) miniMix.update(dt);
+  if(miniObj){
+    const tt=(performance.now()-miniObj.userData.t0)*0.001;
+    miniObj.position.z=Math.min(1.15,tt*0.55)+Math.sin(tt*1.7)*0.07;
+  }
+  if(miniR && document.getElementById('card').classList.contains('active'))
+    miniR.render(miniScene,miniCam);
+
+  controls.update();
+  renderer.render(scene,camera);
+}
+
+// hero name: ask once, remember forever
+(function(){
+  // The name is given once, in the introduction, and Streamlit owns it from
+  // there. The citadel only displays it - there is no second place to set it
+  // and no second copy to disagree with the first.
+  const tag=document.getElementById('herotag');
+  const hero=(HERO||'').trim();
+  if(hero){ tag.textContent='CHALLENGER: '+hero.toUpperCase();
+            tag.style.display='inline'; }
+  // the Begin link picks up the hero name at CLICK time, not card-open time
+  const fb=document.getElementById('c-fight');
+  fb.addEventListener('pointerdown',function(){
+    try{
+      if(!this.href || this.href.indexOf('?station=')<0) return;
+      const u2=new URL(this.href);
+      const h=(HERO||'').trim();
+      if(h) u2.searchParams.set('hero',h); else u2.searchParams.delete('hero');
+      this.href=u2.toString();
+    }catch(e){}
+  });
+  // Entering a battle stays in this tab: hand the name over, then press the
+  // matching hidden button in the parent. The href remains as a fallback for a
+  // browser that will not let us reach it.
+  fb.addEventListener('click',function(ev){
+    var station=this.dataset.station||'';
+    if(!station) return;
+    var self=this;
+    setTimeout(function(){ relay('relay_station_'+slug(station)); },120);
+    ev.preventDefault();
+  });
+})();
+window.resetCamera = resetCamera;
+
+// --- nexus theme: dark cinematic loop (starts on first interaction) ---
+// A mute toggle lives in the header for anyone who prefers quiet; the choice
+// persists (when the browser allows) and the battle arenas honour it too.
+(function(){
+  function saved(){ try{ return localStorage.getItem('gm_mute')==='1'; }catch(e){ return false; } }
+  window.__muted = saved();
+  const mb=document.getElementById('mutebtn');
+  function paint(){ if(mb) mb.textContent = window.__muted ? 'Sound: off' : 'Sound: on'; }
+  paint();
+  if(mb) mb.addEventListener('click', function(){
+    window.__muted = !window.__muted;
+    try{ localStorage.setItem('gm_mute', window.__muted ? '1' : '0'); }catch(e){}
+    const t=window.__theme;
+    if(t){ if(window.__muted) t.pause(); else t.play().catch(function(){}); }
+    paint();
+  });
+  let started=false;
+  addEventListener('pointerdown', function(){
+    if(started) return; started=true;
+    fetch((window.__ORIGIN||'')+'/app/static/audio/nexus-theme.mp3')
+      .then(r=>r.blob())
+      .then(b=>{
+        const a=new Audio(URL.createObjectURL(new Blob([b],{type:'audio/mpeg'})));
+        a.loop=true; a.volume=0.0;
+        if(!window.__muted) a.play().catch(function(){});
+        // gentle fade in, plus a duck near the end of each loop (the track swells)
+        const BASE=0.30, DUCK_S=6;
+        let fade=0; const t2=setInterval(function(){ fade=Math.min(1,fade+0.06);
+          if(fade>=1) clearInterval(t2); },120);
+        a.addEventListener('timeupdate',function(){
+          let duck=1;
+          if(isFinite(a.duration)){
+            const left=a.duration-a.currentTime;
+            if(left<DUCK_S) duck=Math.max(0.55, left/DUCK_S);
+          }
+          a.volume=BASE*fade*duck;
+        });
+        window.__theme=a;
+      }).catch(function(){});
+  }, {once:true});
+})();
+window.__focus = focus;
+
+});
+</script>
+"""
+
+
+_VENDOR_FILES = ["three.min.js", "gsap.min.js", "OrbitControls.js", "EffectComposer.js", "RenderPass.js",
+                 "ShaderPass.js", "CopyShader.js", "LuminosityHighPassShader.js",
+                 "UnrealBloomPass.js", "GLTFLoader.js"]
+_vendor_cache = None  # dict of tuple(files)->joined script tags
 
 # ---------------------------------------------------------------------------
-# Load the list of Anomalies + Chapters from data/anomalies.json every time
-# the app runs. anomalies is still a FLAT dict keyed by anomaly id (Milestone
-# 3 keeps that shape via load_anomalies() even though the file on disk is
-# now nested) -- so this line doesn't need to move or change.
+# Phone fit: the two things a sandboxed scene cannot work out on its own.
+#
+# Every scene is its own document inside a component frame whose height Python
+# picked before anyone knew what device would open it, and whose innerWidth is
+# the frame's, not the phone's. Two facts rescue both: the frame is granted
+# allow-same-origin, so it may read the parent viewport AND resize its own
+# iframe element in the parent. This block ships with the vendored three.js so
+# every scene gets the same two helpers, and both are no-ops on desktop.
 # ---------------------------------------------------------------------------
-anomalies = load_anomalies()
-anomaly_ids = list(anomalies.keys())
-chapters = load_chapters()
+_PHONE_JS = r"""
+<script>
+(function(){
+  var PHONE_MAX = 700;                       // above this, nothing changes
+  var G = window.GWB = window.GWB || {};
+  G.parentSize = function(){
+    try{ var w=window.parent.innerWidth||0, h=window.parent.innerHeight||0;
+         if(w>0 && h>0) return {w:w, h:h}; }catch(e){}
+    return {w:0, h:0};
+  };
+  G.isPhone = function(){ var s=G.parentSize(); return s.w>0 && s.w<=PHONE_MAX; };
 
-# Load saved progress from data/progress.json exactly once per browser
-# session, and keep it in Streamlit's session_state from then on so we're
-# not re-reading the file on every single click. (Moved above the intro
-# scenes in Milestone 3 -- the Command Center needs it to know lock state.)
-if "progress" not in st.session_state:
-    st.session_state.progress = load_progress()
+  /* Give this scene's own iframe a height that suits the phone screen.
+     reserve = the Streamlit controls that must stay visible underneath it, in
+     pixels, or 'auto' to measure whatever the parent page holds besides this
+     frame (right when the tail is a couple of buttons, wrong when the tail is
+     a whole article - those stages pass 0 and let the article scroll).
+     Desktop keeps the fixed height Python asked for. */
+  G.fitFrame = function(reserve, minH){
+    // A scene may lock its own height (e.g. once a battle ends and it has
+    // collapsed to its result) so that a stray resize - the mobile address bar
+    // sliding away as the page scrolls - cannot re-inflate it to full screen.
+    if(window.__gwbFrameLock) return false;
+    var s=G.parentSize();
+    if(!s.w || s.w>PHONE_MAX) return false;
+    if(reserve === 'auto'){
+      reserve = 0;
+      try{
+        // the block container is content-sized, unlike documentElement, whose
+        // scrollHeight never falls below the viewport and would read as a tail
+        var fe0=window.frameElement;
+        var mb=window.parent.document.querySelector(
+          '[data-testid="stMainBlockContainer"]');
+        if(fe0 && mb) reserve=Math.max(0, Math.round(
+          mb.getBoundingClientRect().height - fe0.getBoundingClientRect().height));
+      }catch(e){}
+    }
+    // the viewport always wins: a floor taller than the screen (a phone held
+    // sideways) would push the scene's own controls below the fold
+    var h=Math.min(s.h, Math.max(minH||340, Math.round(s.h-(reserve||0))));
+    try{
+      var fe=window.frameElement; if(!fe) return false;
+      fe.style.height=h+'px'; fe.setAttribute('height', h);
+      // Streamlit also pins the wrapper's height, as a flex-basis in a
+      // generated class, so the block below the scene would otherwise stay
+      // put. The marker lets a rule in the app-wide stylesheet release just
+      // this wrapper - written as a style on the wrapper itself it would
+      // outlive the scene, because Streamlit recycles those DOM nodes for
+      // whatever element lands in the same slot on the next screen.
+      fe.setAttribute('data-gwb-fit','1');
+    }catch(e){ return false; }
+    return true;
+  };
+  /* Keep it applied: Streamlit rewrites the height whenever the component
+     reports its size, and phones fire resize on rotate and on chrome hiding. */
+  G.holdFrame = function(reserve, minH){
+    var go=function(){ G.fitFrame(reserve, minH); };
+    go(); setTimeout(go,60); setTimeout(go,300); setTimeout(go,1200);
+    addEventListener('resize', go);
+    try{ window.parent.addEventListener('resize', go); }catch(e){}
+    return go;
+  };
 
-# ---------------------------------------------------------------------
-# MILESTONE 5, Part C: Travel Transition. Buttons that change screens no
-# longer set view/intro_stage + st.rerun() directly -- they call
-# _begin_transition() below, which stashes the real destination in
-# "pending_view"/"pending_intro_stage" and reruns with "transitioning"
-# on. THIS block, which runs before any normal screen on every rerun, is
-# the only place that ever reads those pending values: it shows the
-# corridor once, sleeps briefly, then lands on the real destination and
-# reruns again. try/except/finally guarantees we always land -- if the
-# corridor render or the sleep ever raises, or if TRANSITION_STUCK_AFTER
-# seconds somehow pass without landing, we skip straight to the
-# destination instead of ever looping or freezing on this screen.
-# ---------------------------------------------------------------------
-TRANSITION_SECONDS = 0.7
-TRANSITION_STUCK_AFTER = 3.0
-
-for _key, _default in (
-    ("transitioning", False),
-    ("pending_view", None),
-    ("pending_intro_stage", None),
-    ("transition_accent", None),
-    ("transition_started", 0.0),
-):
-    if _key not in st.session_state:
-        st.session_state[_key] = _default
-
-
-def _begin_transition(view=None, intro_stage=None, accent_hex=None):
-    """Call this instead of setting view/intro_stage + st.rerun() directly
-    whenever a button changes screens, so the corridor plays first."""
-    st.session_state.pending_view = view
-    st.session_state.pending_intro_stage = intro_stage
-    st.session_state.transition_accent = accent_hex
-    st.session_state.transitioning = True
-    st.session_state.transition_started = time.time()
-    st.rerun()
+  /* Framing that answers the viewport instead of assuming a wide window.
+     Every scene is composed for a landscape frame. Hold the vertical field
+     constant on a tall narrow one and the same shot shows far less of the
+     world sideways, so the subject crops or drifts off the edge. Recover the
+     missing width with a blend of the only two levers that exist: open the
+     field of view up to a cap (cheap, but distorts if pushed), then step the
+     camera back for whatever the cap could not cover (keeps the composition,
+     but shrinks the subject if pushed). Returns the distance multiplier the
+     scene should apply to its camera offset; 1 means nothing to do. */
+  G.frame = function(cam, baseFov, baseAspect, opts){
+    opts = opts || {};
+    var a  = cam.aspect || 1;
+    var a0 = baseAspect || 1.55;
+    if(a >= a0){ cam.fov=baseFov; cam.updateProjectionMatrix(); return 1; }
+    var power  = (opts.power  === undefined) ? 0.62 : opts.power;
+    var maxFov = (opts.maxFov === undefined) ? 66   : opts.maxFov;
+    var maxDist= (opts.maxDist=== undefined) ? 1.9  : opts.maxDist;
+    var need = Math.pow(a0/Math.max(a,0.05), power);
+    var t    = Math.tan(baseFov*Math.PI/360)*need;
+    var fov  = 2*Math.atan(t)*180/Math.PI;
+    var dist = 1;
+    if(fov > maxFov){
+      dist = Math.min(maxDist, t/Math.tan(maxFov*Math.PI/360));
+      fov  = maxFov;
+    }
+    cam.fov = fov; cam.updateProjectionMatrix();
+    return dist;
+  };
+})();
+</script>
+"""
 
 
-if st.session_state.transitioning:
-    stuck = (time.time() - st.session_state.transition_started) > TRANSITION_STUCK_AFTER
+def _vendor_js(files=None) -> str:
+    global _vendor_cache
+    key = tuple(files) if files else tuple(_VENDOR_FILES)
+    if _vendor_cache is None:
+        _vendor_cache = {}
+    if key not in _vendor_cache:
+        parts = []
+        vdir = Path(__file__).parent / "static" / "vendor"
+        for f in key:
+            p = vdir / f
+            if p.exists():
+                parts.append("<script>\n" + p.read_text() + "\n</script>")
+        parts.append(_PHONE_JS)
+        _vendor_cache[key] = "\n".join(parts)
+    return _vendor_cache[key]
+
+
+def _hub_html():
+    data = {n: {"monster": m["monster"], "color": m["color"], "shape": m["shape"],
+                "lore": m["lore"], "model": m.get("model", ""),
+                "clipA": m.get("clip_ambient", ""), "spA": m.get("sp_ambient", 0.8),
+                "ns": m.get("ns", 1.0)}
+            for n, m in MONSTERS.items()}
+    # On a phone the tap-to-pick list sits below the scene; reserve room for it
+    # so it peeks above the fold. 0 everywhere else, so desktop and a phone that
+    # chose "Computer" keep the full-bleed citadel unchanged.
+    reserve = 430 if st.session_state.get("device") == "phone" else 0
+    return (_HUB_TEMPLATE
+            .replace("__VENDOR__", _vendor_js())
+            .replace("__UNITS__", json.dumps(data))
+            .replace("__FIT_RESERVE__", str(reserve))
+            .replace("__HERO__", json.dumps(
+                st.session_state.get("player_name", ""))))
+
+
+def to_dashboard():
+    reset()
+    st.session_state.adventure = False
+    st.session_state.stage = "intro"
+
+
+# ---- the letters home ----------------------------------------------------
+# Everything the agent writes for the parents is kept for the whole session
+# and stacked on one page. A student who walks away from the Collector, or
+# retreats to the nexus, never loses the note that was written for them.
+_LETTER_DIR = Path(__file__).parent / "data" / "letters"
+
+
+def _letter_file():
+    """One file per challenger, on this machine only. Parents should still be
+    able to read what the agent wrote after the child has closed the game."""
+    who = re.sub(r"[^A-Za-z0-9_-]", "", st.session_state.get("player_name", "")
+                 or "challenger")[:24] or "challenger"
+    return _LETTER_DIR / f"{who.lower()}.json"
+
+
+def load_letters():
+    """Letters live in session state, backed by a file so a reload - or a whole
+    new sitting - does not lose them. Session state alone is per browser tab."""
+    if "letters" in st.session_state:
+        return st.session_state.letters
     try:
-        if not stuck:
-            render_transition_scene(accent_hex=st.session_state.transition_accent)
-            time.sleep(TRANSITION_SECONDS)
-    except Exception:
-        pass  # never let a render/timing hiccup block landing, below
-    finally:
-        if st.session_state.pending_view is not None:
-            st.session_state.view = st.session_state.pending_view
-        if st.session_state.pending_intro_stage is not None:
-            st.session_state.intro_stage = st.session_state.pending_intro_stage
-        st.session_state.transitioning = False
-        st.session_state.pending_view = None
-        st.session_state.pending_intro_stage = None
-        st.rerun()
-    st.stop()
+        st.session_state.letters = json.loads(_letter_file().read_text())
+    except (OSError, ValueError):
+        st.session_state.letters = []
+    return st.session_state.letters
 
-# ---------------------------------------------------------------------
-# MILESTONE 1 — new opening scene, gating entry into the existing app.
-# "intro_stage" is a separate flag from the existing "view" state below
-# on purpose, so this doesn't touch the menu/anomaly_room logic at all.
-# ---------------------------------------------------------------------
-if "intro_stage" not in st.session_state:
-    st.session_state.intro_stage = "boot"
 
-if "current_chapter" not in st.session_state:
-    st.session_state.current_chapter = None
+def save_letter(title: str, body: str, kind: str = "report", trick_id: str = "",
+                trick_name: str = "", strand: str = ""):
+    letters = load_letters()
+    if any(l["body"] == body for l in letters):
+        return
+    for _k in ("progress_view", "progress_sig"):  # the record changed
+        st.session_state.pop(_k, None)
+    letters.append({"n": len(letters) + 1, "title": title, "body": body, "kind": kind,
+                    "trick_id": trick_id, "trick_name": trick_name, "strand": strand})
+    try:
+        _LETTER_DIR.mkdir(parents=True, exist_ok=True)
+        _letter_file().write_text(json.dumps(letters, indent=1))
+    except OSError:
+        pass          # a read-only disk must never break the lesson
 
-# MILESTONE 6: which chapters have already shown their Mission Briefing
-# THIS session. Deliberately session-only (not saved to progress.json)
-# so every fresh run sees each chapter's briefing again once.
-if "briefed_chapters" not in st.session_state:
-    st.session_state.briefed_chapters = set()
 
-if st.session_state.intro_stage == "boot":
-    render_boot_scene()
-    if st.button("ENTER FACILITY"):
-        st.session_state.intro_stage = "command_center"
-        st.rerun()
-    st.stop()
+def to_parents():
+    st.session_state.parents_return = st.session_state.get("stage", "map")
+    st.session_state.stage = "parents"
 
-if st.session_state.intro_stage == "command_center":
-    # MILESTONE 3: stations are now REAL chapter data (name / accent color
-    # / lock state), not hardcoded mock divs. Lock state comes straight
-    # from is_chapter_unlocked(), which reuses the existing progress data
-    # -- no second progress system invented.
-    stations = [
-        {
-            "name": chapters[cid]["name"],
-            "accent_hex": getattr(tokens, chapters[cid]["accent_token"]),
-            "unlocked": is_chapter_unlocked(cid, chapters, st.session_state.progress),
-        }
-        for cid in chapters
+
+_HUG_MARK = (
+    '<svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="#e08d6d" '
+    'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" '
+    'style="vertical-align:middle;margin-right:12px">'
+    '<circle cx="15" cy="12" r="5.8"/>'
+    '<path d="M5.5 42v-8.5C5.5 27.7 9.8 23.4 15 23.4"/>'
+    '<circle cx="32.5" cy="24" r="4.4"/>'
+    '<path d="M25 42v-5.6c0-4.1 3.4-7.5 7.5-7.5s7.5 3.4 7.5 7.5V42"/>'
+    '<path d="M15.5 23.6c5.6 0 9.4 3.4 12 8.2"/>'
+    '</svg>')
+
+
+def onboard_stage():
+    """The first thing a new challenger sees: who the monsters are, how a
+    battle is won, and what the Collector is. Skippable, and never shown
+    twice in a sitting."""
+    full_bleed("0")
+    roster = [{"name": m["monster"], "strand": s, "trick": m["taunt"],
+               "color": m["color"], "model": m["model"],
+               "clip": m.get("clip_ambient", ""),
+               # a rest pose that splays along the floor needs a nudge to read
+               # as standing; measured placement alone leaves it looking prone
+               "lift": m.get("lift", 0)}
+              for s, m in MONSTERS.items()]
+    components.html(
+        onboarding.onboarding_html(
+            _vendor_js(["three.min.js", "GLTFLoader.js"]), roster,
+            {"name": "The Collector", "model": onboarding.COLLECTOR_MODEL,
+             "clip": onboarding.COLLECTOR_CLIP}),
+        height=620, scrolling=False)
+    # These two live OUTSIDE the scene on purpose. Streamlit sandboxes the
+    # component frame without allow-top-navigation, so a link inside it can
+    # never leave the introduction, however correct its href looks.
+    def _enter():
+        n = (st.session_state.get("onboard_name") or "").strip()
+        if n:
+            st.session_state.player_name = n[:24][:1].upper() + n[:24][1:]
+        st.session_state.update(onboarded=True, stage="map")
+
+    def _remember():
+        """Commit on Enter, so the welcome appears the moment the name lands
+        rather than only once the player has already left this screen."""
+        n = (st.session_state.get("onboard_name") or "").strip()
+        if n:
+            st.session_state.player_name = n[:24][:1].upper() + n[:24][1:]
+
+    # The device probe: a hidden text field the intro scene writes the real
+    # viewport's verdict into (see onboarding.py). It is pulled out of the flow
+    # so it costs nothing on screen - the scene reaches it by class name.
+    st.markdown('<style>[class*="st-key-onboard_device_probe"]{position:absolute;'
+                'width:1px;height:0;overflow:hidden;clip:rect(0 0 0 0);'
+                'margin:0;padding:0;opacity:0;pointer-events:none}</style>',
+                unsafe_allow_html=True)
+
+    def _device_probe():
+        v = (st.session_state.get("onboard_device_probe") or "").strip().lower()
+        # The measurement chooses the DEFAULT once; after that the toggle is the
+        # player's, so a later re-measure can never yank their choice back.
+        if v in ("phone", "desktop") and not st.session_state.get("_device_probed"):
+            st.session_state["_device_probed"] = True
+            st.session_state["device_pick"] = "Phone" if v == "phone" else "Computer"
+
+    st.text_input("device probe", key="onboard_device_probe",
+                  label_visibility="collapsed", on_change=_device_probe)
+    if "device_pick" not in st.session_state:
+        st.session_state["device_pick"] = "Phone"   # provisional until the probe
+
+    st.text_input("Your name, challenger", key="onboard_name",
+                  placeholder="What should the monsters call you?",
+                  label_visibility="collapsed", on_change=_remember)
+    go_col, skip_col = st.columns(2)
+    go_col.button("Enter the citadel", key="enter_citadel", type="primary",
+                  use_container_width=True, on_click=_enter)
+    skip_col.button("Skip the introduction", key="skip_onboard",
+                    use_container_width=True, on_click=_enter)
+
+    # How are you playing? Pre-selected from the real screen width, overridable.
+    # A phone gets a big tap-to-pick monster list in the citadel; a computer
+    # orbits the 3D nexus exactly as before.
+    st.markdown('<style>[class*="st-key-device_pick"] [role="radiogroup"]{gap:8px}'
+                '[class*="st-key-device_pick"] label{min-width:120px}</style>',
+                unsafe_allow_html=True)
+    pick = st.radio("How are you playing?", ["Phone", "Computer"],
+                    key="device_pick", horizontal=True)
+    st.session_state["device"] = "phone" if pick == "Phone" else "desktop"
+
+    _named = st.session_state.get("player_name", "")
+    if _named:
+        st.markdown(
+            f'<div style="text-align:center;margin:.6rem 0 .2rem">'
+            f'<span style="font-size:1.45rem;font-weight:800;letter-spacing:.01em;'
+            f'background:linear-gradient(135deg,#fff3d8 20%,#e2c07d 60%,#c58f5a);'
+            f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;'
+            f'filter:drop-shadow(0 0 12px rgba(226,192,125,.45))">'
+            f'Welcome, {_hescape(_named)}</span>'
+            f'<div style="color:#9b8ba0;font-size:.72rem;letter-spacing:.1em;'
+            f'text-transform:uppercase;margin-top:.25rem">'
+            f'the monsters know your name now</div></div>',
+            unsafe_allow_html=True)
+    else:
+        st.caption("Your name follows you through the citadel. Leave it blank "
+                   "and the monsters will simply call you Challenger.")
+
+
+def _topic_for_snare(snare_id: str) -> str:
+    """The topic the bank teaches this idea in, so a sheet cannot wander into a
+    neighbouring one. Empty when nothing in the bank carries the tag."""
+    for q in QUESTIONS:
+        if any(o.get("trick_id") == snare_id for o in q.get("options", [])):
+            return q.get("topic", "")
+    return ""
+
+
+def parents_stage():
+    st.markdown('<div class="gwb-kicker">PROMETHEUS LAB · letters home</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<style>.gwb-parents-h{display:flex;align-items:center;gap:6px;margin:0 0 .4rem}'
+        '.gwb-parents-h span{font-size:2.6rem;font-weight:800;letter-spacing:-.01em;'
+        'color:#f2e8dc;line-height:1.05}'
+        '@media (max-width:700px){.gwb-parents-h span{font-size:1.62rem}'
+        '.gwb-parents-h svg{width:30px;height:30px;flex:0 0 30px}}</style>'
+        f'<div class="gwb-parents-h">{_HUG_MARK}'
+        '<span>For mum and dad</span></div>', unsafe_allow_html=True)
+    # also at the foot of the page, but that is a long way down past the
+    # letters, the progress panel and the worksheets
+    scroll_to_top("parents")
+    st.button("Back to the game", key="parents_back_top", on_click=back_to_map)
+    letters = list(reversed(load_letters()))
+    who = st.session_state.get("player_name", "your child")
+    if not letters:
+        note("Nothing here yet",
+             "Every time the agent has something worth telling you — what tripped "
+             f"{_hescape(who)} up, what it tried, what to do at the kitchen table — "
+             "the note is kept on this page for the whole session.")
+    else:
+        st.caption(f"{len(letters)} note{'s' if len(letters) != 1 else ''} from this "
+                   "session, newest first. Nothing left the device to write them.")
+        for l in letters:
+            with st.expander(f"{l['n']}. {l['title']}", expanded=(l is letters[0])):
+                with st.container(border=True):
+                    st.markdown(l["body"])
+        bundle = f"# Letters home for {who}\n\n" + "\n\n---\n\n".join(
+            f"## {l['title']}\n\n{l['body']}" for l in reversed(letters))
+        st.download_button("Download every note as one file", bundle,
+                           file_name="letters_home.md", key="dl_letters")
+
+        # ---- how the run is going: code counts, Gemma interprets ----
+        # Keyed on the record itself: a summary cached by name alone went on
+        # showing zeros after a drill had been fought and a relic won.
+        _sig = (len(load_letters()), len(st.session_state.get("skirmish_log", [])),
+                len(st.session_state.get("relics", [])),
+                tuple(st.session_state.get("mastered_names", [])),
+                st.session_state.get("last_score", ""))
+        if (st.session_state.get("progress_sig") != _sig
+                or "progress_view" not in st.session_state):
+            st.session_state.progress_sig = _sig
+            with st.spinner("Reading the run so far..."):
+                st.session_state.progress_view = progress.summarise(
+                    load_letters(),
+                    st.session_state.get("mastered_names", []),
+                    st.session_state.get("skirmish_log", []),
+                    st.session_state.get("relics", []),
+                    st.session_state.get("last_score", ""))
+        pv = st.session_state.get("progress_view") or {}
+        st.divider()
+        st.subheader("How it is going")
+        if pv.get("headline"):
+            st.markdown(f"**{esc(pv['headline'])}**")
+        if pv.get("rows"):
+            _pcols = ["What", "Count", "Details"]
+            _phead = "".join(f"<th>{_hescape(str(_c))}</th>" for _c in _pcols)
+            _pbody = "".join(
+                "<tr>" + "".join(
+                    f'<td class="pt-{_c.lower()}">{_hescape(str(_r.get(_c, "")))}</td>'
+                    for _c in _pcols
+                ) + "</tr>"
+                for _r in pv["rows"]
+            )
+            st.markdown(
+                '<div class="gwb-ptable"><table>'
+                f'<thead><tr>{_phead}</tr></thead><tbody>{_pbody}</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+        if pv.get("chart"):
+            st.caption("Speed drills - best against latest")
+            st.bar_chart(pv["chart"])
+        if pv.get("reading"):
+            note("What this says", esc_note(pv["reading"]))
+
+        # ---- printable practice, one sheet per snare ----
+        snares, seen = [], set()
+        for l in letters:
+            t = (l.get("trick_id"), l.get("trick_name"), l.get("strand"))
+            if t[0] and t[0] not in seen:
+                seen.add(t[0]); snares.append(t)
+        if snares:
+            st.divider()
+            st.subheader("Practice you can print")
+            st.caption("Ten questions on one snare, with the working space and an "
+                       "answer key. Verified bank questions come first; Prometheus Lab writes "
+                       "any extra ones and must solve each of them again, blind, "
+                       "before it goes on the paper.")
+            for tid, tname, tstrand in snares:
+                key = f"sheet_{tid}"
+                cols = st.columns([3, 2])
+                cols[0].markdown(f"**{tname}**  \n<span style='color:#a99'>{tstrand}"
+                                 "</span>", unsafe_allow_html=True)
+                if key not in st.session_state:
+                    if cols[1].button("Make a practice sheet", key=f"mk_{tid}",
+                                      use_container_width=True):
+                        with st.spinner(f"Building ten questions on {tname}..."):
+                            st.session_state[key] = practice_sheet.build_sheet(
+                                tid, tname, tstrand, QUESTIONS, want=10,
+                                topic=_topic_for_snare(tid))
+                        st.rerun()
+                else:
+                    sheet = st.session_state[key]
+                    c = sheet["counts"]
+                    cols[1].download_button(
+                        f"Print sheet ({len(sheet['items'])} questions)",
+                        sheet["html"],
+                        file_name=f"practice_{tid.lower()}.html",
+                        mime="text/html", key=f"dl_{tid}", use_container_width=True)
+                    cols[0].caption(f"{c['bank']} from the verified bank"
+                                    + (f", {c['generated']} written and self-checked "
+                                       "by Prometheus Lab" if c["generated"] else ""))
+    st.divider()
+    back = st.session_state.get("parents_return", "map")
+    st.button("Back to the game", key="parents_back", type="primary",
+              on_click=lambda: st.session_state.update(stage=back))
+
+
+_TAUNT_TEMPLATE = r"""
+<style>html,body{margin:0;background:#0b0710;overflow:hidden}</style>
+<div id="v"></div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  // Draw at whatever size the frame actually is: a phone shrinks this heckler
+  // to a corner badge, and a canvas fixed at 170 square would be cropped to a
+  // slice of the monster instead of the whole of it.
+  let W=Math.max(innerWidth||0,40), H=Math.max(innerHeight||0,40);
+  const r=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  r.setSize(W,H); r.setPixelRatio(Math.min(devicePixelRatio,2));
+  r.outputEncoding=THREE.sRGBEncoding; document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(38,W/H,0.1,50);
+  cam.position.set(0,1.6,4.6); cam.lookAt(0,1.1,0);
+  function fitBadge(){
+    W=Math.max(innerWidth||0,40); H=Math.max(innerHeight||0,40);
+    r.setSize(W,H); cam.aspect=W/H;
+    // a narrow badge would crop a wide monster: widen the field to suit
+    if(window.GWB) GWB.frame(cam,38,1.0,{power:0.5,maxFov:60,maxDist:1});
+    else cam.updateProjectionMatrix();
+  }
+  fitBadge();
+  addEventListener('resize',fitBadge);
+  sc.add(new THREE.AmbientLight(0xffffff,0.95));
+  const sp=new THREE.SpotLight(0xfff3e0,3.0,30,Math.PI/4,0.5);
+  sp.position.set(0,7,3); sc.add(sp);
+  let mix=null,obj=null;
+  new THREE.GLTFLoader().load((window.__ORIGIN||'')+"__MODEL__",(g)=>{
+    obj=g.scene;
+    const b=new THREE.Box3().setFromObject(obj), sz=b.getSize(new THREE.Vector3());
+    obj.scale.setScalar(2.6/Math.max(sz.x,sz.y,sz.z,0.001));
+    const b2=new THREE.Box3().setFromObject(obj), c=b2.getCenter(new THREE.Vector3());
+    obj.position.set(-c.x,-b2.min.y,-c.z); sc.add(obj);
+    const hh=b2.max.y-b2.min.y;
+    cam.position.set(0, hh*0.55, 3.4);
+    cam.lookAt(0, hh*0.5, 0);
+    if(g.animations&&g.animations.length){
+      mix=new THREE.AnimationMixer(obj);
+      const clip=g.animations.find(a=>a.name==="__CLIPPREF__")
+               ||g.animations.find(a=>/idle/i.test(a.name))||g.animations[0];
+      const act=mix.clipAction(clip); act.timeScale=__TS__; act.play();
+    }
+  });
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    if(mix) mix.update(dt);
+    if(obj) obj.rotation.y=Math.sin(tt*0.7)*0.35;
+    r.render(sc,cam); })(0);
+});
+</script>
+"""
+
+
+_FIGHT_TEMPLATE = r"""
+<style>
+html,body{margin:0;background:#0b0710;overflow:hidden;font-family:'Trebuchet MS',sans-serif}
+#hud{position:absolute;inset:0;pointer-events:none;color:#f2e8dc}
+#title{position:absolute;top:8px;left:12px;font-size:.68rem;letter-spacing:.16em;color:#e08d6d;font-weight:900}
+#hp{position:absolute;top:8px;right:12px;width:170px}
+#hp .lbl{font-size:.6rem;letter-spacing:.14em;color:#b9a794;text-align:right}
+#hp .bar{height:10px;border:1px solid #3a2a35;border-radius:6px;background:#160e18;overflow:hidden}
+#hp .fill{height:100%;width:100%;background:linear-gradient(90deg,#ff6b6b,__COLOR__);transition:width .2s}
+#bub{position:absolute;bottom:10px;left:12px;max-width:60%;background:#1c1119;
+  border:1px solid __COLOR__;border-radius:12px 12px 12px 2px;padding:7px 11px;
+  font-size:.78rem;box-shadow:0 0 14px __COLOR__55}
+#win{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  font-size:1.1rem;font-weight:900;letter-spacing:.14em;color:#ffefdd;
+  text-shadow:0 0 18px __COLOR__;text-align:center;padding:0 14px;box-sizing:border-box}
+@media (max-width:700px){
+  #title{font-size:.6rem;letter-spacing:.08em;max-width:52%;line-height:1.3}
+  #hp{width:110px;top:6px;right:10px}
+  #hp .lbl{font-size:.56rem}
+  #bub{max-width:calc(100% - 24px);left:12px;right:12px;font-size:.76rem}
+  #win{font-size:.95rem;letter-spacing:.08em}
+}
+</style>
+<div id="v"></div>
+<div id="hud">
+  <div id="title">WHILE PROMETHEUS LAB FORGES YOUR GUIDE... CLICK THE MONSTER</div>
+  <div id="hp"><div class="lbl">__NAME__ HP</div><div class="bar"><div class="fill" id="fill"></div></div></div>
+  <div id="bub"><strong>__NAME__:</strong> <span id="line"></span></div>
+  <div id="win">DOWN - NOW FINISH IT WITH THE MATH BELOW</div>
+</div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  const TAUNTS=__TAUNTS__;
+  let li=0; const lineEl=document.getElementById('line');
+  lineEl.textContent=TAUNTS[0];
+  setInterval(()=>{ li=(li+1)%TAUNTS.length; lineEl.textContent=TAUNTS[li]; },3600);
+  const W=innerWidth,H=innerHeight;
+  const r=new THREE.WebGLRenderer({antialias:true});
+  r.setSize(W,H); r.outputEncoding=THREE.sRGBEncoding; r.setClearColor(0x0b0710);
+  document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(36,W/Math.max(H,1),0.1,60);
+  cam.position.set(0,1.8,5.4); cam.lookAt(0,1.1,0);
+  // a phone makes this strip wide and short - hold the subject in frame
+  if(window.GWB) GWB.frame(cam,36,2.6,{power:0.5,maxFov:52,maxDist:1});
+  addEventListener('resize',function(){
+    r.setSize(innerWidth,innerHeight);
+    cam.aspect=innerWidth/Math.max(innerHeight,1);
+    if(window.GWB) GWB.frame(cam,36,2.6,{power:0.5,maxFov:52,maxDist:1});
+    else cam.updateProjectionMatrix();
+  });
+  sc.add(new THREE.AmbientLight(0xffffff,0.9));
+  const sp=new THREE.SpotLight(0xfff3e0,3.2,40,Math.PI/4,0.5); sp.position.set(0,8,4); sc.add(sp);
+  let mix=null,obj=null,hp=100,down=false,flash=0;
+  new THREE.GLTFLoader().load((window.__ORIGIN||'')+"__MODEL__",(g)=>{
+    obj=g.scene;
+    const b=new THREE.Box3().setFromObject(obj), sz=b.getSize(new THREE.Vector3());
+    obj.scale.setScalar(2.8/Math.max(sz.x,sz.y,sz.z,0.001));
+    const b2=new THREE.Box3().setFromObject(obj), c=b2.getCenter(new THREE.Vector3());
+    obj.position.set(-c.x,-b2.min.y,-c.z); sc.add(obj);
+    if(g.animations&&g.animations.length){
+      mix=new THREE.AnimationMixer(obj);
+      const clip=g.animations.find(a=>a.name==="__FCLIP__")
+               ||g.animations.find(a=>/idle/i.test(a.name))||g.animations[0];
+      const act=mix.clipAction(clip); act.timeScale=__FTS__; act.play();
+    }
+  });
+  addEventListener('click',()=>{
+    if(down||!obj) return;
+    hp=Math.max(0,hp-9); flash=1;
+    document.getElementById('fill').style.width=hp+'%';
+    if(hp===0){ down=true;
+      document.getElementById('win').style.display='flex';
+      document.getElementById('bub').style.display='none'; }
+  });
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    if(mix) mix.update(dt);
+    if(obj){
+      obj.rotation.y=Math.sin(tt*0.8)*0.4;
+      if(flash>0){ flash-=dt*4; obj.position.x=Math.sin(tt*60)*0.06*flash; }
+      if(down){ obj.rotation.z=Math.min(Math.PI/2,obj.rotation.z+dt*2); }
+    }
+    r.render(sc,cam); })(0);
+});
+</script>
+"""
+
+
+def _fight_html(mon, score, total):
+    taunts = [
+        f"{score} out of {total}? I barely felt that.",
+        "Keep clicking, hero - the real fight is the math below.",
+        "I have devoured sharper answers for breakfast.",
+        f"Prometheus Lab is writing your rescue plan. You will need it after {score}/{total}.",
+        "Hit me all you want - only understanding defeats me.",
     ]
-    render_command_center_scene(stations=stations)
-
-    # The 3D cards above are visual only (they live inside a sandboxed
-    # iframe with no click-back-to-Streamlit hook). These real buttons
-    # right underneath are what you actually click -- one per chapter,
-    # in the same left-to-right order as the stations above.
-    cols = st.columns(len(chapters))
-    for col, cid in zip(cols, chapters):
-        chapter = chapters[cid]
-        unlocked = is_chapter_unlocked(cid, chapters, st.session_state.progress)
-        with col:
-            if unlocked:
-                if st.button(f"▶ {chapter['name']}", key=f"enter_chapter_{cid}"):
-                    st.session_state.current_chapter = cid
-                    chapter_accent = getattr(tokens, chapter["accent_token"])
-                    # MILESTONE 6: first time this chapter is entered THIS
-                    # session, detour through the Mission Briefing; after
-                    # that, go straight to the menu like before.
-                    next_view = "menu" if cid in st.session_state.briefed_chapters else "briefing"
-                    _begin_transition(view=next_view, intro_stage="done", accent_hex=chapter_accent)
-            else:
-                st.button(f"🔒 {chapter['name']}", key=f"locked_chapter_{cid}", disabled=True)
-
-    if debug_mode:
-        st.caption("DEBUG: instantly mark a chapter's anomalies cleared, to test lock states.")
-        dcols = st.columns(len(chapters) + 1)
-        for col, cid in zip(dcols, chapters):
-            with col:
-                if st.button(f"Force-clear: {chapters[cid]['name']}", key=f"debug_clear_{cid}"):
-                    debug_force_clear_chapter(st.session_state.progress, chapters[cid])
-                    save_progress(st.session_state.progress)
-                    st.rerun()
-        with dcols[-1]:
-            if st.button("Reset all progress", key="debug_reset_progress"):
-                st.session_state.progress = debug_reset_progress()
-                st.rerun()
-
-        # MILESTONE 6: re-trigger any chapter's Mission Briefing on
-        # demand, since otherwise it only shows once per chapter per
-        # session -- same button-per-chapter pattern as Force-clear above.
-        st.caption("DEBUG: re-trigger a chapter's Mission Briefing on demand.")
-        bcols = st.columns(len(chapters))
-        for col, cid in zip(bcols, chapters):
-            with col:
-                if st.button(f"Briefing: {chapters[cid]['name']}", key=f"debug_briefing_{cid}"):
-                    st.session_state.current_chapter = cid
-                    _begin_transition(
-                        view="briefing",
-                        intro_stage="done",
-                        accent_hex=getattr(tokens, chapters[cid]["accent_token"]),
-                    )
-
-        # -------------------------------------------------------------
-        # MILESTONE 5: instantly jump to the Mission Debrief scene for
-        # any anomaly, so it can be tested repeatedly without grinding
-        # through real questions each time.
-        # -------------------------------------------------------------
-        st.caption("DEBUG: instantly trigger the Mission Debrief scene for any anomaly.")
-        debrief_choice = st.selectbox(
-            "Anomaly to instantly clear + debrief:", anomaly_ids, key="debug_debrief_choice"
-        )
-        if st.button("Trigger Debrief", key="debug_trigger_debrief"):
-            unlocked_before = {
-                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
-            }
-            debug_force_clear_anomaly(st.session_state.progress, debrief_choice)
-            save_progress(st.session_state.progress)
-            unlocked_after = {
-                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
-            }
-            newly_unlocked = [
-                chapters[cid]["name"] for cid in chapters
-                if not unlocked_before[cid] and unlocked_after[cid]
-            ]
-            owning_chapter = next(
-                (cid for cid in chapters if debrief_choice in chapters[cid]["anomalies"]), None
-            )
-            st.session_state.current_chapter = owning_chapter
-            st.session_state.current_anomaly = debrief_choice
-            st.session_state.debrief_anomaly_id = debrief_choice
-            st.session_state.debrief_newly_unlocked = newly_unlocked
-            st.session_state.intro_stage = "done"
-            debrief_accent = (
-                getattr(tokens, chapters[owning_chapter]["accent_token"])
-                if owning_chapter else tokens.MENTOR_ACCENT
-            )
-            _begin_transition(view="debrief", accent_hex=debrief_accent)
-    st.stop()
-
-st.title("Prometheus Lab")
-
-# -----------------------------------------------------------------------
-# PHASE 4 FIX: messages (like "Correct!" or an AI-error warning) used to
-# vanish almost instantly. That's because every Submit click calls
-# st.rerun() to refresh the streak/question -- and Streamlit throws away
-# any st.info/st.warning/st.error the moment it reruns. So instead of
-# printing a message once and hoping it survives, we now save messages
-# here in session_state and redraw them on every rerun until the
-# student clicks the "✕" button to dismiss them.
-# -----------------------------------------------------------------------
-if "feedback_messages" not in st.session_state:
-    st.session_state.feedback_messages = []
-
-# THIS MILESTONE: the most recent verdict for the current Anomaly, so the
-# Anomaly Chamber scene can react to it (calm/stabilize on "resolved",
-# shudder/destabilize on "thin"/"wrong"). None = no submission yet this
-# visit -> scene stays neutral. Reset whenever a new Anomaly is entered,
-# in _enter_anomaly() below.
-if "last_verdict" not in st.session_state:
-    st.session_state.last_verdict = None
-
-# -----------------------------------------------------------------------
-# PHASE 8: which screen is showing right now. "menu" = new Home Menu.
-# "anomaly_room" = the existing question/streak/3D-scene screen. Defaults
-# to "menu" on first load, and ALSO on every real browser refresh, since
-# session_state is wiped on a true reload (only progress.json on disk
-# survives a reload, which is exactly what we want).
-# -----------------------------------------------------------------------
-if "view" not in st.session_state:
-    st.session_state.view = "menu"
+    return (_FIGHT_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "GLTFLoader.js"]))
+            .replace("__MODEL__", mon["model"])
+            .replace("__COLOR__", mon["color"])
+            .replace("__NAME__", mon["monster"])
+            .replace("__FCLIP__", mon.get("clip_fight", ""))
+            .replace("__FTS__", str(mon.get("sp_fight", 0.7)))
+            .replace("__TAUNTS__", json.dumps(taunts)))
 
 
-def _enter_anomaly(anomaly_id):
-    """Switch to an Anomaly's room and load ITS saved progress into
-    session_state, so it resumes exactly where it left off."""
-    st.session_state.current_anomaly = anomaly_id
-    saved = get_anomaly_progress(st.session_state.progress, anomaly_id)
-    st.session_state.question_index = saved["question_index"]
-    st.session_state.streak = saved["streak"]
-    st.session_state.cleared = saved["cleared"]
-    st.session_state.feedback_messages = []
-    st.session_state.last_verdict = None
+def _taunt_html(model, clip_pref="walk", speed=0.55):
+    return (_TAUNT_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "GLTFLoader.js"]))
+            .replace("__MODEL__", model)
+            .replace("__CLIPPREF__", clip_pref)
+            .replace("__TS__", str(speed)))
 
 
-# -----------------------------------------------------------------------
-# PHASE 8: HOME MENU screen. Replaces the old st.selectbox dropdown. Lists
-# all 3 Anomalies with a cleared/uncleared badge (read from
-# st.session_state.progress, always current since we save to disk after
-# every Submit) and a button to enter each one.
-# -----------------------------------------------------------------------
-if st.session_state.view == "menu":
-    # MILESTONE 3: only show anomalies from the chapter the player entered
-    # through in the Command Center -- not the old flat all-anomalies list.
-    current_chapter_id = st.session_state.current_chapter
-    if current_chapter_id and current_chapter_id in chapters:
-        chapter_anomaly_ids = chapters[current_chapter_id]["anomalies"]
-        st.subheader(f"Select an Anomaly — {chapters[current_chapter_id]['name']}")
-    else:
-        # Fallback (shouldn't normally happen): show everything rather
-        # than crash if current_chapter was never set.
-        chapter_anomaly_ids = anomaly_ids
-        st.subheader("Select an Anomaly")
+_ENCOUNTER_TEMPLATE = r"""
+<style>
+html,body{margin:0;background:#0b0710;overflow:hidden;font-family:'Trebuchet MS',sans-serif}
+#stage{position:relative;width:100%;height:100vh}
+#v canvas{filter:saturate(1.06) contrast(1.09) brightness(.96)}
+#vig{position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(ellipse 75% 62% at 50% 42%,transparent 55%,rgba(4,3,8,.55) 82%,rgba(2,2,6,.9) 100%)}
+#bub{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);z-index:10;
+  width:min(560px,86%);background:#1c1119;border:1px solid __COLOR__;
+  border-radius:14px;padding:14px 16px 46px;color:#f2e8dc;font-size:1rem;
+  box-shadow:0 0 22px __COLOR__66}
+#bub .who{font-size:.68rem;letter-spacing:.16em;color:__COLOR__;font-weight:900}
+#line{margin:6px 0 0}
+/* NEXT sits in its own reserved strip under the line. It used to float over
+   the bottom-right corner of the bubble, where a long taunt ran underneath it
+   and lost its last words. */
+#next{position:absolute;right:12px;bottom:9px;background:__COLOR__;color:#14090c;
+  font-weight:900;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;
+  letter-spacing:.08em;font-size:.8rem}
+#bub.done{padding-bottom:14px}
+@media (max-width:700px){
+  #bub{bottom:14px;width:calc(100% - 24px);padding:12px 13px 58px;
+    border-radius:12px;font-size:.95rem;line-height:1.4}
+  #bub .who{font-size:.66rem}
+  #bub.done{padding-bottom:12px}
+  #next{left:12px;right:12px;bottom:11px;padding:0;height:44px;
+    border-radius:10px;font-size:.85rem;width:auto}
+}
+@media (max-width:900px) and (max-height:460px){
+  #bub{bottom:10px;width:calc(100% - 84px);left:auto;right:12px;transform:none;
+    padding:9px 12px 12px;font-size:.85rem}
+  #next{position:static;display:block;margin:8px 0 0;width:100%;height:40px;padding:0}
+}
+</style>
+<div id="stage"><div id="v"></div><div id="vig"></div>
+  <div id="bub"><div class="who">__NAME__</div>
+    <div id="line"></div>
+    <button id="next">NEXT</button></div>
+</div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  // room for the two buttons Streamlit draws under the scene
+  GWB.holdFrame('auto', 360);
+  const LINES=__LINES__; let li=0;
+  const lineEl=document.getElementById('line'), btn=document.getElementById('next');
+  lineEl.textContent=LINES[0];
+  btn.onclick=()=>{ li++;
+    if(li>=LINES.length){ lineEl.textContent="Enough talk. Step in - if you dare.";
+      btn.style.display='none';
+      document.getElementById('bub').classList.add('done'); return; }
+    lineEl.textContent=LINES[li]; };
+  const W=innerWidth,H=innerHeight;
+  const r=new THREE.WebGLRenderer({antialias:true});
+  r.setSize(W,H); r.setPixelRatio(Math.min(devicePixelRatio,2));
+  r.outputEncoding=THREE.sRGBEncoding;
+  r.toneMapping=THREE.ACESFilmicToneMapping; r.toneMappingExposure=1.0;
+  r.setClearColor(0x0b0710);
+  document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene();
+  sc.fog=new THREE.FogExp2(0x0b0710,0.048);
+  // the great hall of the Blackthorn citadel: camera low in the aisle,
+  // looking up the hall toward the monster on its dais
+  const MON_Z=-3.9;               // how far up the hall the monster stands
+  const DAIS_TOP=0.9;             // height of the dais it stands on
+  const DAIS_W=12.0, DAIS_D=6.4;  // its top step
+  const TARGET_H=5.2;             // how tall a well-proportioned monster reads
+  const cam=new THREE.PerspectiveCamera(44,W/Math.max(H,1),0.1,60);
+  // Framing answers the viewport (see GWB.frame). A single monster centred in
+  // the hall needs only a modest widening on a phone - the tall screen already
+  // shows more of it top to bottom - but without any, wings clip at the sides.
+  const EYE=new THREE.Vector3(0,3.0,9.4);
+  let AIM=new THREE.Vector3(0,3.2,MON_Z), FRAME=1;
+  function place(){
+    FRAME=GWB.frame(cam,44,1.55,{power:0.45,maxFov:58,maxDist:1.12});
+    cam.position.set(AIM.x+(EYE.x-AIM.x)*FRAME,
+                     AIM.y+(EYE.y-AIM.y)*FRAME,
+                     AIM.z+(EYE.z-AIM.z)*FRAME);
+    // a phone puts the speech across the bottom: aim under the monster so it
+    // stands clear of its own words
+    cam.lookAt(AIM.x, AIM.y-(GWB.isPhone()?0.6:0), AIM.z);
+  }
+  place();
+  addEventListener('resize',function(){
+    cam.aspect=innerWidth/Math.max(innerHeight,1);
+    r.setSize(innerWidth,innerHeight); place();
+  });
 
-    if st.button("← Back to Command Center"):
-        _begin_transition(intro_stage="command_center", accent_hex=tokens.CHAPTER_1_ACCENT)
+  // ---- canvas masonry textures (same technique as the citadel hub) ----
+  function makeStoneTex(base,line,cols,rows,rx,ry){
+    const cv=document.createElement('canvas'); cv.width=512; cv.height=512;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle=base; ctx.fillRect(0,0,512,512);
+    ctx.strokeStyle=line; ctx.lineWidth=5;
+    const rh=512/rows,cw=512/cols;
+    for(let i=0;i<rows;i++){
+      const y=i*rh;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(512,y); ctx.stroke();
+      const off=(i%2===0)?0:cw/2;
+      for(let j=0;j<cols+1;j++){
+        const x=j*cw+off;
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+rh); ctx.stroke();
+      }
+    }
+    for(let i=0;i<9000;i++){
+      const x=Math.random()*512,y=Math.random()*512;
+      const sh=Math.floor(Math.random()*40);
+      ctx.fillStyle='rgba('+sh+','+sh+','+sh+',0.16)';
+      ctx.fillRect(x,y,2,2);
+    }
+    const tex=new THREE.CanvasTexture(cv);
+    tex.wrapS=THREE.RepeatWrapping; tex.wrapT=THREE.RepeatWrapping;
+    tex.repeat.set(rx,ry);
+    return tex;
+  }
+  const floorMat=new THREE.MeshStandardMaterial({
+    map:makeStoneTex('#241b26','#100a14',4,5,2,4),roughness:0.85,metalness:0.1});
+  const wallMat=new THREE.MeshStandardMaterial({
+    map:makeStoneTex('#2a2130','#130d18',8,14,4,2),roughness:0.9,metalness:0.05});
+  const colMat=new THREE.MeshStandardMaterial({
+    map:makeStoneTex('#2a2130','#130d18',6,10,1.2,2.2),roughness:0.85,metalness:0.08});
+  const trimMat=new THREE.MeshStandardMaterial({color:0x1c1420,roughness:0.9});
+  const woodMat=new THREE.MeshStandardMaterial({color:0x2b1e16,roughness:0.8});
+  const ironMat=new THREE.MeshStandardMaterial({color:0x191216,roughness:0.55,metalness:0.55});
 
-    for aid in chapter_anomaly_ids:
-        info = anomalies[aid]
-        saved = get_anomaly_progress(st.session_state.progress, aid)
-        status = "✅ Cleared" if saved["cleared"] else "🔒 In Progress"
-        with st.container(border=True):
-            st.markdown(f"**{info['name']}** — {status}")
-            st.caption(info["description"])
-            if st.button("Enter", key=f"enter_{aid}"):
-                _enter_anomaly(aid)
-                enter_accent = (
-                    getattr(tokens, chapters[current_chapter_id]["accent_token"])
-                    if current_chapter_id in chapters else tokens.CHAPTER_1_ACCENT
-                )
-                _begin_transition(view="anomaly_room", accent_hex=enter_accent)
-    st.stop()
+  // ---- hall shell: flagstone floor, ceremonial runner, walls, ceiling ----
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(17,38),floorMat);
+  floor.rotation.x=-Math.PI/2; floor.position.set(0,0,-3); sc.add(floor);
+  const runner=new THREE.Mesh(new THREE.PlaneGeometry(2.3,7.6),
+    new THREE.MeshStandardMaterial({color:0x451523,roughness:0.95}));
+  runner.rotation.x=-Math.PI/2; runner.position.set(0,0.015,3.0); sc.add(runner);
+  const wallL=new THREE.Mesh(new THREE.BoxGeometry(0.6,9,36),wallMat);
+  wallL.position.set(-7.6,4.5,-3); sc.add(wallL);
+  const wallR=wallL.clone(); wallR.position.x=7.6; sc.add(wallR);
+  const backWall=new THREE.Mesh(new THREE.BoxGeometry(16,9,0.8),wallMat);
+  backWall.position.set(0,4.5,-9.4); sc.add(backWall);
+  const ceiling=new THREE.Mesh(new THREE.PlaneGeometry(17,38),
+    new THREE.MeshStandardMaterial({color:0x0e0912,roughness:1}));
+  ceiling.rotation.x=Math.PI/2; ceiling.position.set(0,8.4,-3); sc.add(ceiling);
 
-# -----------------------------------------------------------------------
-# MILESTONE 6: Mission Briefing. Shown once per chapter per session,
-# right after the Travel Transition into that chapter and before its
-# anomaly menu -- see the Command Center button + debug buttons above,
-# which decide when to route here. A separate "view" state, same pattern
-# as "menu"/"anomaly_room"/"debrief" -- doesn't touch any of their logic.
-# -----------------------------------------------------------------------
-if st.session_state.view == "briefing":
-    briefing_chapter_id = st.session_state.current_chapter
-    chapter = chapters.get(briefing_chapter_id)
-    chapter_name = chapter["name"] if chapter else "Unknown Wing"
-    chapter_accent = getattr(tokens, chapter["accent_token"]) if chapter else tokens.MENTOR_ACCENT
-    render_briefing_scene(
-        chapter_name=chapter_name,
-        mentor_name=MENTOR_NAME,
-        lines=briefing_lines_for(briefing_chapter_id),
-        accent_hex=chapter_accent,
-    )
-    if st.button("Begin Investigation", type="primary"):
-        st.session_state.briefed_chapters.add(briefing_chapter_id)
-        _begin_transition(view="menu", accent_hex=chapter_accent)
-    st.stop()
+  // ---- two rows of columns receding toward the dais ----
+  function column(x,z){
+    const cg=new THREE.Group();
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.62,6.6,10),colMat);
+    shaft.position.y=3.6; cg.add(shaft);
+    const cbase=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,1.6),trimMat);
+    cbase.position.y=0.3; cg.add(cbase);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.45,1.5),trimMat);
+    cap.position.y=7.1; cg.add(cap);
+    cg.position.set(x,0,z); sc.add(cg);
+  }
+  [[-4.9,4.8],[4.9,4.8],[-4.9,1.4],[4.9,1.4],[-4.9,-2.0],[4.9,-2.0]]
+    .forEach(p=>column(p[0],p[1]));
 
-# -----------------------------------------------------------------------
-# MILESTONE 5, Part B: Mission Debrief. Shown once, right when an anomaly
-# is newly cleared (see the ANALYZE handler below), before returning to
-# the chapter menu. A separate "view" state, same pattern as "menu" vs
-# "anomaly_room" above -- doesn't touch either of their logic.
-# -----------------------------------------------------------------------
-if st.session_state.view == "debrief":
-    debrief_id = st.session_state.get("debrief_anomaly_id")
-    debrief_anomaly_name = anomalies.get(debrief_id, {}).get("name", debrief_id or "Unknown Anomaly")
-    render_debrief_scene(
-        anomaly_name=debrief_anomaly_name,
-        mentor_name=MENTOR_NAME,
-        mentor_line=debrief_line_for(debrief_id),
-        newly_unlocked_names=st.session_state.get("debrief_newly_unlocked", []),
-    )
-    if st.button("Continue", type="primary"):
-        _begin_transition(view="menu", accent_hex=tokens.CHAPTER_1_ACCENT)
-    st.stop()
+  // ---- banners on the side walls, banded in the monster's colour ----
+  const bannerMat=new THREE.MeshStandardMaterial({color:0x3a1220,roughness:0.95,
+    side:THREE.DoubleSide});
+  const bandMat=new THREE.MeshBasicMaterial({color:new THREE.Color("__COLOR__"),
+    transparent:true,opacity:0.8,side:THREE.DoubleSide});
+  [[-7.2,3.1],[7.2,3.1],[-7.2,-0.5],[7.2,-0.5]].forEach(p=>{
+    const inward=(p[0]<0)?1:-1;
+    const bn=new THREE.Mesh(new THREE.PlaneGeometry(1.4,3.1),bannerMat);
+    bn.position.set(p[0],4.7,p[1]); bn.rotation.y=inward*Math.PI/2; sc.add(bn);
+    const band=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.42),bandMat);
+    band.position.set(p[0]+inward*0.02,5.95,p[1]); band.rotation.y=inward*Math.PI/2;
+    sc.add(band);
+    const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.8,6),woodMat);
+    rod.rotation.x=Math.PI/2; rod.position.set(p[0]+inward*0.02,6.35,p[1]); sc.add(rod);
+  });
 
-# From here down we are inside "anomaly_room" for st.session_state.current_anomaly.
-selected_id = st.session_state.current_anomaly
+  // ---- raised dais of three flagstone steps ----
+  [[DAIS_W+2.8,DAIS_D+2.4,0.15],[DAIS_W+1.4,DAIS_D+1.2,0.45],[DAIS_W,DAIS_D,0.75]].forEach(s=>{
+    const step=new THREE.Mesh(new THREE.BoxGeometry(s[0],0.3,s[1]),floorMat);
+    step.position.set(0,s[2],MON_Z); sc.add(step);
+  });
+  const daisAnchor=new THREE.Group();
+  daisAnchor.position.set(0,DAIS_TOP,MON_Z); sc.add(daisAnchor);
 
-if st.button("← Back to Menu"):
-    _begin_transition(view="menu", accent_hex=tokens.CHAPTER_1_ACCENT)
+  // ---- a bare stone wall behind it: the firelight is the only feature ----
+  const sealGlow=new THREE.PointLight(0xffd87a,0.35,9);
+  sealGlow.position.set(0,5.2,-8.2); sc.add(sealGlow);
 
-anomaly = anomalies[selected_id]
-questions = anomaly["questions"]
+  // ---- lighting: a dark hall lit almost entirely by its fires ----
+  sc.add(new THREE.AmbientLight(0x1a2338,0.42));
+  const moon=new THREE.DirectionalLight(0x9fb6e8,0.16);
+  moon.position.set(-6,12,4); sc.add(moon);
+  const key=new THREE.SpotLight(0xffd9a8,1.5,40,Math.PI/5,0.6);
+  key.position.set(0,7.6,3.4); key.target.position.set(0,1.6,MON_Z);
+  sc.add(key); sc.add(key.target);
+  const rim=new THREE.PointLight(new THREE.Color("__COLOR__"),2.4,18);
+  rim.position.set(0,3.4,MON_Z-2.4); sc.add(rim);
 
-st.caption(anomaly["description"])
+  // ---- torch and brazier flames: sprite glow + emissive core + flicker ----
+  const flameTex=(function(){
+    const cv=document.createElement('canvas'); cv.width=64; cv.height=64;
+    const ctx=cv.getContext('2d');
+    const fg=ctx.createRadialGradient(32,36,2,32,32,30);
+    fg.addColorStop(0,'rgba(255,236,180,0.95)');
+    fg.addColorStop(0.35,'rgba(255,150,60,0.65)');
+    fg.addColorStop(1,'rgba(255,90,20,0)');
+    ctx.fillStyle=fg; ctx.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(cv);
+  })();
+  const flames=[];
+  function addFlame(x,y,z,intensity){
+    const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:flameTex,color:0xffc078,
+      transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false}));
+    spr.position.set(x,y,z); spr.scale.set(0.85,1.2,1); sc.add(spr);
+    const core=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.42,7),
+      new THREE.MeshBasicMaterial({color:0xffb45e}));
+    core.position.set(x,y-0.08,z); sc.add(core);
+    const l=new THREE.PointLight(0xff8844,intensity,13);
+    l.position.set(x,y+0.15,z); sc.add(l);
+    flames.push({light:l,sprite:spr,base:intensity,x:x,y:y,z:z,seed:Math.random()*10});
+  }
+  function addTorch(x,z){
+    const inward=(x<0)?1:-1;
+    const stick=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.6,6),woodMat);
+    stick.position.set(x-inward*0.12,3.1,z); stick.rotation.z=inward*0.45; sc.add(stick);
+    addFlame(x,3.5,z,1.15);
+  }
+  addTorch(-5.6,-2.0); addTorch(5.6,-2.0);
+  function addBrazier(x,z){
+    const ped=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.42,1.05,8),trimMat);
+    ped.position.set(x,0.52,z); sc.add(ped);
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.3,0.4,10),ironMat);
+    bowl.position.set(x,1.25,z); sc.add(bowl);
+    addFlame(x,1.72,z,1.45);
+  }
+  addBrazier(-4.4,0.4); addBrazier(4.4,0.4);
 
-# -----------------------------------------------------------------------
-# MILESTONE 4: every Anomaly now has its own live 3D reaction scene (was
-# vacuum_box-only through Milestone 3). render_anomaly_scene() picks the
-# right focal object + chapter accent color for selected_id -- see
-# ui/focal_objects.py and ui/scene_viewer.py.
-# -----------------------------------------------------------------------
-render_anomaly_scene(anomaly_id=selected_id, verdict=st.session_state.last_verdict)
+  // ---- embers drifting up from the flames (same snare as the hub) ----
+  const EMBERS=120;
+  const eGeo=new THREE.BufferGeometry();
+  const ePos=new Float32Array(EMBERS*3);
+  const eMeta=[];
+  for(let i=0;i<EMBERS;i++){
+    const f=flames[i%flames.length];
+    const m={f:f,jx:(Math.random()-0.5)*0.7,jz:(Math.random()-0.5)*0.7,
+      spd:0.008+Math.random()*0.014,ph:Math.random()*6.28};
+    eMeta.push(m);
+    ePos[i*3]=f.x+m.jx; ePos[i*3+1]=f.y+Math.random()*3; ePos[i*3+2]=f.z+m.jz;
+  }
+  eGeo.setAttribute('position',new THREE.BufferAttribute(ePos,3));
+  sc.add(new THREE.Points(eGeo,new THREE.PointsMaterial({color:0xffcc55,size:0.09,
+    transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false})));
 
-# -----------------------------------------------------------------------
-# Redraw any messages saved from the last Submit click, each with its own
-# ✕ button. Clicking ✕ removes just that one message and reruns, so the
-# rest stay put. Messages stay on screen indefinitely otherwise -- no
-# more disappearing after a few seconds.
-# -----------------------------------------------------------------------
-for msg in list(st.session_state.feedback_messages):
-    col_text, col_close = st.columns([20, 1])
-    with col_text:
-        getattr(st, msg["kind"])(msg["text"])
-    with col_close:
-        if st.button("✕", key=f"dismiss_{msg['id']}"):
-            st.session_state.feedback_messages = [
-                m for m in st.session_state.feedback_messages if m["id"] != msg["id"]
-            ]
-            st.rerun()
+  let mix=null,obj=null;
+  new THREE.GLTFLoader().load((window.__ORIGIN||'')+"__MODEL__",(g)=>{
+    obj=g.scene;
+    // Placement has to hold for EVERY model in the bestiary: they differ wildly
+    // in proportion (squat frogs, wide wings, tall skeletons), so nothing here
+    // is tuned to one monster.
+    const b=new THREE.Box3().setFromObject(obj), sz=b.getSize(new THREE.Vector3());
+    // 1. blended size metric: height alone inflates squat models, max-dimension
+    //    alone shrinks winged ones, so weigh the footprint at 62% (as the nexus)
+    const eff=Math.max(sz.y,0.62*Math.max(sz.x,sz.z),0.001);
+    // 2. keep it inside the hall so wings never pass through a wall
+    const s=Math.min(TARGET_H/eff, 13.0/Math.max(sz.x,0.001));
+    obj.scale.setScalar(s);
+    // 3. centre it and lift it clear of the stone. The lift is a fraction of
+    //    the model's own height, so a small frog and a tall skeleton both read
+    //    as STANDING ON the dais rather than sunk into it - animation clips
+    //    dip below the rest-pose box, which is what made models look swallowed.
+    const b2=new THREE.Box3().setFromObject(obj), c=b2.getCenter(new THREE.Vector3());
+    const h=b2.max.y-b2.min.y;
+    const lift=Math.max(0.22,h*0.10);
+    obj.position.set(-c.x,-b2.min.y+lift,-c.z); daisAnchor.add(obj);
+    // 4. frame whatever we ended up with, instead of a fixed guess
+    const eyeY=DAIS_TOP+lift+h*0.52;
+    AIM.set(0,eyeY,MON_Z); place();
+    rim.position.set(0,eyeY,MON_Z-2.4);
+    key.target.position.set(0,eyeY,MON_Z);
+    if(g.animations&&g.animations.length){
+      mix=new THREE.AnimationMixer(obj);
+      const clip=g.animations.find(a=>a.name==="__ECLIP__")
+               ||g.animations.find(a=>/idle/i.test(a.name))||g.animations[0];
+      const act=mix.clipAction(clip); act.timeScale=__ETS__; act.play();
+    }
+  });
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    if(mix) mix.update(dt);
+    if(obj) obj.rotation.y=Math.sin(tt*0.5)*0.25;
+    flames.forEach(function(f){
+      f.light.intensity=f.base+Math.sin(tt*12+f.seed*7)*0.35+(Math.random()-0.5)*0.3;
+      const fs=1+Math.sin(tt*11+f.seed*9)*0.08;
+      f.sprite.scale.set(0.85*fs,1.2*fs,1);
+    });
+    const ea=eGeo.attributes.position.array;
+    for(let i=0;i<EMBERS;i++){
+      const m=eMeta[i];
+      ea[i*3+1]+=m.spd;
+      ea[i*3]=m.f.x+m.jx+Math.sin(tt*1.6+m.ph)*0.12;
+      ea[i*3+2]=m.f.z+m.jz+Math.cos(tt*1.3+m.ph)*0.12;
+      if(ea[i*3+1]>m.f.y+3.1) ea[i*3+1]=m.f.y-0.1;
+    }
+    eGeo.attributes.position.needsUpdate=true;
+    const sPulse=Math.sin(tt*1.4)*0.5+0.5;
+    sealGlow.intensity=0.22+sPulse*0.25;   // the back wall breathes with the fires
+    r.render(sc,cam); })(0);
+});
+</script>
+"""
 
-# PHASE 6 (this session): no UI for snare tagging yet -- just a debug-only
-# readout, behind the existing ?debug=1 flag, so you can verify a wrong/
-# thin answer is capturing a snare id in session state.
-if debug_mode:
-    st.caption(f"DEBUG — last tagged snare: {st.session_state.get('last_snare_id')}")
-    _mastery_debug = st.session_state.progress.get("_mastery", {}).get(selected_id, {})
-    st.caption(f"DEBUG — mastery state: {_mastery_debug}")
 
-if st.session_state.cleared:
-    # NOTE: no st.success() banner here on purpose -- the Debrief scene
-    # (see the "debrief" view above) already delivers this moment in
-    # ARBITER's voice the instant the anomaly is newly cleared. A second,
-    # generic "Anomaly Cleared!" banner here would just be redundant noise
-    # on every later visit to an already-cleared anomaly.
-    if st.button("Restart This Anomaly"):
-        st.session_state.question_index = 0
-        st.session_state.streak = 0
-        st.session_state.cleared = False
+_BOSS_TEMPLATE = r"""
+<style>
+html,body{margin:0;background:#050308;overflow:hidden;font-family:'Trebuchet MS',sans-serif}
+#stage{position:relative;width:100%;height:100vh}
+#stage.shake{animation:sh .35s}
+@keyframes sh{0%,100%{transform:none}20%{transform:translate(-9px,4px)}40%{transform:translate(8px,-5px)}60%{transform:translate(-6px,-3px)}80%{transform:translate(5px,3px)}}
+#vig2{position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse 70% 60% at 50% 40%,transparent 50%,rgba(2,1,4,.75) 85%,#020104 100%)}
+#hud2{position:absolute;inset:0;z-index:5;pointer-events:none;color:#e8dfd2}
+#btitle{position:absolute;top:14px;left:18px;font-size:1.5rem;font-weight:900;
+  letter-spacing:.2em;color:#cfd4ff;text-shadow:0 0 18px #6672ff}
+#bsub{position:absolute;top:52px;left:19px;font-size:.7rem;letter-spacing:.16em;color:#8a86a8}
+#lives{position:absolute;top:16px;right:18px;display:flex;gap:7px}
+#bmute{position:absolute;top:44px;right:18px;pointer-events:auto;cursor:pointer;
+  background:rgba(20,12,22,.72);border:1px solid #3a2a35;border-radius:14px;
+  color:#cbbfd6;font:700 .58rem/1 'Trebuchet MS',sans-serif;letter-spacing:.14em;
+  padding:6px 10px}
+#bmute:hover{color:#ffefdd;border-color:#e08d6d}
+.pip{width:20px;height:20px;background:linear-gradient(135deg,#ff6b6b,#a8434f);
+  border-radius:4px;transform:rotate(45deg);box-shadow:0 0 10px #ff6b6b88}
+.pip.gone{background:#241a22;box-shadow:none}
+#qbox{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);
+  width:min(480px,88%);text-align:center;pointer-events:auto}
+#qq{font-size:2rem;font-weight:900;color:#fff;text-shadow:0 0 16px #6672ff;margin-bottom:8px}
+#timer{height:7px;background:#181226;border-radius:4px;overflow:hidden;margin:0 0 12px}
+#tfill{height:100%;width:100%;background:linear-gradient(90deg,#6672ff,#cfd4ff);transition:width .1s linear}
+#ans{background:#120d1c;border:2px solid #6672ff;border-radius:10px;color:#fff;
+  font-size:1.4rem;text-align:center;width:150px;padding:9px;outline:none}
+#go2{background:#6672ff;border:none;border-radius:10px;color:#0a0714;font-weight:900;
+  font-size:1rem;padding:12px 22px;margin-left:10px;cursor:pointer;letter-spacing:.1em}
+#bline{position:absolute;left:50%;top:70px;transform:translateX(-50%);max-width:80%;
+  background:rgba(10,7,18,.85);border:1px solid #6672ff;border-radius:12px;
+  padding:9px 15px;font-size:.95rem;color:#dfe2ff;text-align:center;
+  box-shadow:0 0 20px #6672ff44}
+#endcard{display:none;position:absolute;inset:0;z-index:6;align-items:center;justify-content:center;
+  flex-direction:column;background:rgba(3,2,7,.72);text-align:center;padding:0 8%}
+#endtitle{font-size:2.2rem;font-weight:900;letter-spacing:.16em;color:#fff;text-shadow:0 0 24px #6672ff}
+#endsub{margin-top:10px;color:#b9b4d6;font-size:1rem}
+/* ---- PHONE: the arena keeps every control, at thumb size ---------------
+   The answer field and STRIKE stack instead of sharing a line, and the whole
+   question box lifts clear of the letters-home button in the corner. */
+@media (max-width:700px){
+  #btitle{top:10px;left:12px;font-size:1.02rem;letter-spacing:.1em}
+  #bsub{top:33px;left:13px;font-size:.62rem;letter-spacing:.06em;
+    max-width:calc(100% - 130px);line-height:1.25}
+  #lives{top:11px;right:12px;gap:6px}
+  .pip{width:16px;height:16px}
+  #bmute{top:36px;right:12px;padding:9px 11px;font-size:.6rem}
+  #bline{top:78px;max-width:calc(100% - 24px);font-size:.85rem;padding:8px 12px;
+    line-height:1.35}
+  #qbox{bottom:62px;width:calc(100% - 24px)}
+  #qq{font-size:1.6rem;margin-bottom:7px}
+  #ans{width:100%;box-sizing:border-box;font-size:1.25rem;padding:11px;
+    margin:0 0 9px}
+  #go2{display:block;width:100%;margin:0;height:48px;padding:0;font-size:.92rem}
+  #endcard{padding:0 6%}
+  #endtitle{font-size:1.5rem;letter-spacing:.1em}
+  #endsub{font-size:.92rem;line-height:1.4}
+}
+@media (max-width:900px) and (max-height:460px){
+  #bsub{display:none}
+  #bline{top:auto;bottom:8px;left:62px;right:auto;transform:none;
+    max-width:38%;font-size:.75rem}
+  #qbox{bottom:10px;left:auto;right:12px;transform:none;width:46%}
+  #qq{font-size:1.2rem}
+  #go2{height:42px}
+}
+</style>
+<div id="stage">
+  <div id="v"></div><div id="vig2"></div>
+  <div id="hud2">
+    <div id="btitle">THE COLLECTOR</div>
+    <div id="bsub">HE TESTS WHAT SHOULD ALREADY BE YOURS</div>
+    <div id="lives"><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+    <button id="bmute">SOUND: ON</button>
+    <div id="bline">So. __HERO__. The one the little ones whisper about. Answer fast - I have no patience for slow minds.</div>
+    <div id="qbox">
+      <div id="qq"></div>
+      <div id="timer"><div id="tfill"></div></div>
+      <input id="ans" inputmode="numeric" autocomplete="off">
+      <button id="go2">STRIKE</button>
+    </div>
+  </div>
+  <div id="endcard"><div id="endtitle"></div><div id="endsub"></div></div>
+</div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  // procedural battle audio (no files): thud on hit, resolution chord at the end
+  let __actx=null;
+  function __a(){ if(!__actx) __actx=new (window.AudioContext||window.webkitAudioContext)(); return __actx; }
+  function __gmMuted(){ try{ return localStorage.getItem('gm_mute')==='1'; }catch(e){ return false; } }
+  function sndThud(){ if(__gmMuted()) return; try{ const c=__a(),o=c.createOscillator(),g=c.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(110,c.currentTime);
+    o.frequency.exponentialRampToValueAtTime(38,c.currentTime+0.25);
+    g.gain.setValueAtTime(0.5,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.3);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.32);}catch(e){} }
+  function sndEnd(won){ if(__gmMuted()) return; try{ const c=__a();
+    const freqs=won?[523.25,659.25,783.99,1046.5]:[220,207.65,196,185];
+    freqs.forEach((f,i)=>{ const o=c.createOscillator(),g=c.createGain();
+      o.type=won?'triangle':'sawtooth'; o.frequency.value=f; g.gain.value=0.0;
+      o.connect(g); g.connect(c.destination); o.start(c.currentTime+i*0.12);
+      g.gain.setValueAtTime(0.12,c.currentTime+i*0.12);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+i*0.12+(won?0.9:1.4));
+      o.stop(c.currentTime+i*0.12+1.5); });}catch(e){} }
 
-        reset_mastery_state(st.session_state.progress, selected_id)
-        update_anomaly_progress(st.session_state.progress, selected_id, 0, 0, False)
-        save_progress(st.session_state.progress)
-        st.rerun()
-else:
-    q = questions[st.session_state.question_index]
-    st.subheader(q["prompt"])
+  // ---- the "correct" cue: only the first beat of the clip, so a fast run of
+  // right answers never turns into overlapping four-second stings ----
+  let __cueBuf=null;
+  (function(){
+    fetch((window.__ORIGIN||'')+'/app/static/audio/correct.mp3')
+      .then(r=>r.arrayBuffer())
+      .then(a=>__a().decodeAudioData(a))
+      .then(b=>{ __cueBuf=b; })
+      .catch(function(){});
+  })();
+  function sndRight(){
+    if(__gmMuted()||!__cueBuf) return;
+    try{
+      const c=__a(), s=c.createBufferSource(), g=c.createGain();
+      s.buffer=__cueBuf; s.connect(g); g.connect(c.destination);
+      const DUR=1.0;
+      g.gain.setValueAtTime(0.85,c.currentTime);
+      g.gain.setValueAtTime(0.85,c.currentTime+DUR-0.16);
+      g.gain.linearRampToValueAtTime(0.0001,c.currentTime+DUR);
+      s.start(c.currentTime,0,DUR);
+    }catch(e){}
+  }
 
-    explanation_key = f"explanation_{selected_id}_{st.session_state.question_index}"
+  // ---- the Collector's theme: loops for as long as he holds the room ----
+  // Fetched as a blob because Streamlit serves .mp3 with a text content type
+  // that the browser refuses to play directly. Same mute switch as the citadel.
+  (function(){
+    const VOL=0.26;
+    let theme=null, started=false;
+    function begin(){
+      if(started || __gmMuted()) return;
+      started=true;
+      fetch((window.__ORIGIN||'')+'/app/static/audio/collector-theme.mp3')
+        .then(r=>r.blob())
+        .then(b=>{
+          theme=new Audio(URL.createObjectURL(new Blob([b],{type:'audio/mpeg'})));
+          theme.loop=true; theme.volume=0;
+          theme.play().catch(function(){});
+          let fade=0;
+          const t=setInterval(function(){
+            fade=Math.min(1,fade+0.05);
+            if(theme) theme.volume=VOL*fade;
+            if(fade>=1) clearInterval(t);
+          },110);
+        }).catch(function(){ started=false; });
+    }
+    // autoplay may need a gesture in this frame: try now, else on first input
+    begin();
+    addEventListener('pointerdown',begin);
+    addEventListener('keydown',begin);
 
-    # -----------------------------------------------------------------
-    # PHASE 3: "vacuum_box" now gets a REAL calculation instead of the
-    # old keyword-matching text box. The student types a NUMBER (their
-    # guess for the net force on the box, in Newtons), and we check that
-    # number with actual arithmetic in logic/physics_calc.py.
-    #
-    # The other two Anomalies (sinking_stone, hot_cold_chairs) are
-    # untouched — they still show a plain text box like before.
-    # -----------------------------------------------------------------
-    is_vacuum_box = selected_id == "vacuum_box"
+    const mb=document.getElementById('bmute');
+    function paint(){ if(mb) mb.textContent=__gmMuted()?'SOUND: OFF':'SOUND: ON'; }
+    paint();
+    if(mb) mb.addEventListener('click',function(){
+      const muting=!__gmMuted();
+      try{ localStorage.setItem('gm_mute',muting?'1':'0'); }catch(e){}
+      if(muting){ if(theme) theme.pause(); }
+      else if(theme){ theme.play().catch(function(){}); }
+      else { begin(); }
+      paint();
+    });
+  })();
 
-    if is_vacuum_box:
-        force_key = f"force_{selected_id}_{st.session_state.question_index}"
-        student_force = st.number_input(
-            "Enter the net force acting on the box, in Newtons (N):",
-            value=0.0,
-            step=0.1,
-            format="%.2f",
-            key=force_key,
-        )
-    else:
-        answer_key = f"answer_{selected_id}_{st.session_state.question_index}"
-        student_answer = st.text_input("Your answer:", key=answer_key)
+  // the arena owns the phone screen; the briefing below it scrolls
+  GWB.holdFrame(0, 420);
+  const W=innerWidth,H=innerHeight;
+  const r=new THREE.WebGLRenderer({antialias:true});
+  r.setSize(W,H); r.outputEncoding=THREE.sRGBEncoding; r.setClearColor(0x050308);
+  document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene(); sc.fog=new THREE.FogExp2(0x050308,0.05);
+  const cam=new THREE.PerspectiveCamera(42,W/Math.max(H,1),0.1,80);
+  // framing answers the viewport, not a guess about the window (GWB.frame)
+  const EYE={x:0,y:2.6,z:7.5}, AIM={x:0,y:2.4,z:0};
+  function place(){
+    const f=GWB.frame(cam,42,1.55,{power:0.32,maxFov:50,maxDist:1.0});
+    cam.position.set(AIM.x+(EYE.x-AIM.x)*f, AIM.y+(EYE.y-AIM.y)*f,
+                     AIM.z+(EYE.z-AIM.z)*f);
+    const off=(innerWidth>innerHeight*1.4 && innerHeight<=470)
+      ? 0.22*2*Math.tan(cam.fov*Math.PI/360)*Math.abs(EYE.z-AIM.z)*cam.aspect : 0;
+    cam.lookAt(AIM.x+off, AIM.y+(GWB.isPhone()?0.5:0), AIM.z);
+  }
+  place();
+  addEventListener('resize',function(){
+    cam.aspect=innerWidth/Math.max(innerHeight,1);
+    r.setSize(innerWidth,innerHeight); place();
+  });
+  // How much room the fighter actually has, measured off the strips the HUD
+  // reserves rather than assumed: the taunt owns the top of the arena and the
+  // question box owns the bottom, and on a phone what is left between them is
+  // a fraction of what a desktop window leaves.
+  function visHAt(y){
+    const d=cam.position.distanceTo(new THREE.Vector3(0,y,0));
+    return 2*Math.tan(cam.fov*Math.PI/360)*d;
+  }
+  function visWAt(y){ return visHAt(y)*cam.aspect; }
+  // sideways on a phone the taunt and the question sit side by side along the
+  // bottom instead of stacking, so the strips are read by where they actually
+  // are rather than by where portrait puts them
+  function sideways(){ return innerWidth>innerHeight*1.4 && innerHeight<=470; }
+  function bandAt(y){
+    const hh=innerHeight||1, pad=Math.max(6,hh*0.015);
+    const bl=document.getElementById('bline').getBoundingClientRect();
+    const qb=document.getElementById('qbox').getBoundingClientRect();
+    let top=0, bot=hh;
+    if(bl.top<hh*0.5) top=Math.max(top,bl.bottom);
+    if(qb.bottom>hh*0.5) bot=Math.min(bot,qb.top);
+    let f=(bot-top-2*pad)/hh;
+    if(!(f>0.22)) f=0.22;
+    if(sideways()) f=Math.min(f,0.66);
+    return 0.88*f*visHAt(y);   // never let a limb touch either strip
+  }
+  sc.add(new THREE.AmbientLight(0x9aa0ff,0.85));
+  const key=new THREE.SpotLight(0xcfd4ff,3.4,50,Math.PI/3,0.5); key.position.set(0,12,6); sc.add(key);
+  const under=new THREE.PointLight(0x6672ff,2.2,20); under.position.set(0,0.4,1.5); sc.add(under);
+  // A frontal fill aimed from the camera so the Collector reads as a monster and
+  // not a silhouette - on a phone the other five are well lit and he was not.
+  const fill=new THREE.PointLight(0xd7dcff,1.8,40); fill.position.set(0,3.4,7.5); sc.add(fill);
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(30,48),
+    new THREE.MeshStandardMaterial({color:0x0a0712,metalness:.4,roughness:.85}));
+  floor.rotation.x=-Math.PI/2; sc.add(floor);
+  let mix=null,obj=null,entrance=0,actIdle=null,actHit=null;
+  new THREE.GLTFLoader().load((window.__ORIGIN||'')+"__MODEL__",(g)=>{
+    obj=g.scene;
+    const b=new THREE.Box3().setFromObject(obj), sz=b.getSize(new THREE.Vector3());
+    obj.scale.setScalar(0.15);
+    // A phone shows a smaller picture, so the subject has to own more of it -
+    // but never more than fits, so the width of the shot caps it as well.
+    obj.userData.fullScale=Math.min(
+      (GWB.isPhone()?7.4:5.2)/Math.max(sz.x,sz.y,sz.z,0.001),
+      bandAt(2.4)/Math.max(sz.y,0.001),
+      0.92*visWAt(2.4)/Math.max(sz.x,0.001));
+    const b2=new THREE.Box3().setFromObject(obj), c=b2.getCenter(new THREE.Vector3());
+    obj.position.set(-c.x,3.2,-c.z-1); sc.add(obj);
+    if(g.animations&&g.animations.length){
+      mix=new THREE.AnimationMixer(obj);
+      const fi=g.animations.find(a=>/Flying_Idle/.test(a.name))||g.animations[0];
+      const hb=g.animations.find(a=>/Headbutt|Punch/.test(a.name));
+      actIdle=mix.clipAction(fi); actIdle.timeScale=0.85; actIdle.play();
+      if(hb){ actHit=mix.clipAction(hb); actHit.setLoop(THREE.LoopOnce); actHit.timeScale=1.0; }
+    }
+    entrance=1;
+  });
+  
+  
+  
+  
+  
+  function attack(){
+    sndThud();
+    document.getElementById('stage').classList.add('shake');
+    setTimeout(()=>document.getElementById('stage').classList.remove('shake'),380);
+    if(actHit&&actIdle){ actHit.reset().fadeIn(0.1).play(); actIdle.fadeOut(0.1);
+      setTimeout(()=>{ actHit.fadeOut(0.2); actIdle.reset().fadeIn(0.2).play(); },900); }
+  }
+  // ---- quick-fire engine (all client-side, deterministic) ----
+  const LINES_HIT=["Too slow. That answer is MINE now.","Wrong. I collect those, you know.",
+    "Your teachers would weep, __HERO__.","Again you hesitate. Delicious."];
+  const LINES_OK=["Hmph. Lucky.","Fine. Keep it.","Sharp. For now.","That one escapes me. Barely."];
+  let qi=0,lives=3,score=0,cur=null,tleft=0,timerId=null;
+  const QMAX=10,TIME=8;
+  function newQ(){
+    if(qi>=QMAX){ return end(true); }
+    qi++;
+    const kind=Math.random();
+    let a2,b2,ans;
+    if(kind<0.55){ a2=2+Math.floor(Math.random()*11); b2=2+Math.floor(Math.random()*11); ans=a2*b2;
+      document.getElementById('qq').textContent=a2+" x "+b2+" = ?"; }
+    else if(kind<0.8){ a2=11+Math.floor(Math.random()*79); b2=6+Math.floor(Math.random()*79); ans=a2+b2;
+      document.getElementById('qq').textContent=a2+" + "+b2+" = ?"; }
+    else { a2=30+Math.floor(Math.random()*69); b2=6+Math.floor(Math.random()*(a2-9)); ans=a2-b2;
+      document.getElementById('qq').textContent=a2+" - "+b2+" = ?"; }
+    cur=ans; tleft=TIME;
+    const inp=document.getElementById('ans'); inp.value=''; inp.focus();
+    clearInterval(timerId);
+    timerId=setInterval(()=>{ tleft-=0.1;
+      document.getElementById('tfill').style.width=Math.max(0,tleft/TIME*100)+'%';
+      if(tleft<=0){ miss("Time's up. "); } },100);
+  }
+  function say(msg){ document.getElementById('bline').textContent=msg.replace(/__HERO__/g,"__HERO__"); }
+  function miss(prefix){
+    clearInterval(timerId); lives--; attack();
+    const pips=document.querySelectorAll('.pip:not(.gone)');
+    if(pips.length) pips[pips.length-1].classList.add('gone');
+    say((prefix||"")+LINES_HIT[Math.floor(Math.random()*LINES_HIT.length)]+"  (answer: "+cur+")");
+    if(lives<=0) return end(false);
+    setTimeout(newQ,900);
+  }
+  function hit(){
+    clearInterval(timerId); score++; sndRight();
+    say(LINES_OK[Math.floor(Math.random()*LINES_OK.length)]);
+    setTimeout(newQ,500);
+  }
+  function submit(){
+    const v=parseFloat(document.getElementById('ans').value);
+    if(isNaN(v)) return;
+    (v===cur)?hit():miss("");
+  }
+  document.getElementById('go2').onclick=submit;
+  document.getElementById('ans').addEventListener('keydown',e=>{ if(e.key==='Enter') submit(); });
+  function end(won){
+    clearInterval(timerId);
+    const ec=document.getElementById('endcard');
+    sndEnd(won); ec.style.display='flex';
+    document.getElementById('endtitle').textContent= won?"HE RETREATS":"COLLECTED";
+    document.getElementById('endsub').textContent= won
+      ? "\"Adequate... for now. Your basics are still yours, __HERO__. I will be back for the rest.\"  Score: "+score+" of "+QMAX
+      : "\"Your basics belong to me now. Train with the little ones and buy them back.\"  Score: "+score+" of "+QMAX;
+    document.getElementById('qbox').style.display='none';
+    // The fight owned the whole phone screen; the way forward (face him again,
+    // the drills, retreat) lives in Streamlit below it. Left at full height the
+    // endcard is a centred line of text floating in a screen of dead black with
+    // the controls a full scroll away. Collapse the arena to the endcard so
+    // those controls sit right under it and the screen reads as a result, not a
+    // dead end. Desktop keeps its composed arena.
+    try{
+      const s=(window.GWB&&GWB.parentSize)?GWB.parentSize():{w:innerWidth,h:innerHeight};
+      if(s.w && s.w<=700){
+        const fe=window.frameElement;
+        if(fe){ const h=Math.min(s.h,460);
+          fe.style.height=h+'px'; fe.setAttribute('height',h);
+          fe.setAttribute('data-gwb-fit','1');
+          window.__gwbFrameLock=1; }
+      }
+    }catch(e){}
+  }
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    if(mix) mix.update(dt);
+    if(obj){
+      if(entrance>0&&entrance<2){ entrance+=dt*0.55;
+        const k=Math.min(1,entrance-1+0.55);
+        const fs=obj.userData.fullScale;
+        const e2=Math.min(1,Math.max(0,(entrance-1)*1.4+0.4));
+        obj.scale.setScalar(0.15+(fs-0.15)*e2);
+        obj.position.y=3.2-1.4*e2;
+      }
+      obj.position.x=Math.sin(tt*0.35)*0.5;
+      obj.rotation.y=Math.sin(tt*0.3)*0.2;
+    }
+    r.render(sc,cam); })(0);
+  setTimeout(newQ,2600);
+});
+</script>
+"""
 
-    explanation = st.text_area("Explain your reasoning in one sentence:", key=explanation_key)
 
-    # -----------------------------------------------------------------
-    # PHASE 4 (THIS MILESTONE: hidden by default): the old Phase 1/2
-    # dropdown is a dev/testing safety net, not something a player should
-    # see. It now only renders when the page URL includes "?debug=1" --
-    # e.g. http://localhost:8501/?debug=1 -- so you can still flip it on
-    # yourself to test offline without an API key, without it cluttering
-    # the normal experience. When hidden, use_mock/fake_verdict default
-    # to False/"resolved" so a real (or failed) AI call still behaves
-    # exactly as before.
-    # -----------------------------------------------------------------
-    if debug_mode:
-        use_mock = st.checkbox(
-            "Use mock verdict instead of real AI (fallback if API fails or I'm low on budget)"
-        )
-        fake_verdict = st.selectbox(
-            "Mock AI verdict (used only when the checkbox above is checked, "
-            "or automatically if the real AI call fails):",
-            ["resolved", "thin", "wrong"],
-        )
-    else:
-        use_mock = False
-        fake_verdict = "resolved"
+def _boss_html(name):
+    html = (_BOSS_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "GLTFLoader.js"]))
+            .replace("__MODEL__", "/app/static/monsters/skull.glb"))
+    return html.replace("__HERO__", _hescape(name))
 
-    if st.button("ANALYZE", type="primary"):
-        # Messages from THIS submission. We build a fresh list each time
-        # rather than adding onto the old one, so a new Submit naturally
-        # replaces the previous round's feedback -- but each message you
-        # see is still yours to dismiss (or leave up) independently.
-        new_messages = []
 
-        # MILESTONE 5: snapshot "before" state so we can tell, after this
-        # submission, whether the anomaly was JUST cleared (not already
-        # cleared from an earlier visit) and whether that newly unlocked
-        # any chapter -- needed to drive the one-time Debrief scene below.
-        was_cleared_before = st.session_state.cleared
-        unlocked_before = {
-            cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
+_SKIRMISH_TEMPLATE = r"""
+<style>
+html,body{margin:0;background:#050308;overflow:hidden;font-family:'Trebuchet MS',sans-serif}
+#stage{position:relative;width:100%;height:100vh}
+#stage.shake{animation:sh .35s}
+@keyframes sh{0%,100%{transform:none}20%{transform:translate(-9px,4px)}40%{transform:translate(8px,-5px)}60%{transform:translate(-6px,-3px)}80%{transform:translate(5px,3px)}}
+#vig2{position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse 70% 60% at 50% 40%,transparent 50%,rgba(2,1,4,.75) 85%,#020104 100%)}
+#hud2{position:absolute;inset:0;z-index:5;pointer-events:none;color:#e8dfd2}
+#btitle{position:absolute;top:14px;left:18px;font-size:1.5rem;font-weight:900;
+  letter-spacing:.2em;color:#fff;text-shadow:0 0 18px __COLOR__}
+#bsub{position:absolute;top:52px;left:19px;font-size:.7rem;letter-spacing:.16em;color:#8a86a8}
+#lives{position:absolute;top:16px;right:18px;display:flex;gap:7px}
+.pip{width:20px;height:20px;background:linear-gradient(135deg,#ff6b6b,#a8434f);
+  border-radius:4px;transform:rotate(45deg);box-shadow:0 0 10px #ff6b6b88}
+.pip.gone{background:#241a22;box-shadow:none}
+#streakbox{position:absolute;top:52px;right:18px;font-size:.75rem;letter-spacing:.14em;
+  color:__COLOR__;text-shadow:0 0 10px __COLOR__66;text-align:right}
+#qbox{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);
+  width:min(480px,88%);text-align:center;pointer-events:auto}
+#qq{font-size:2rem;font-weight:900;color:#fff;text-shadow:0 0 16px __COLOR__;margin-bottom:8px}
+#timer{height:7px;background:#181226;border-radius:4px;overflow:hidden;margin:0 0 12px}
+#tfill{height:100%;width:100%;background:linear-gradient(90deg,__COLOR__,#fff);transition:width .1s linear}
+#ans{background:#120d1c;border:2px solid __COLOR__;border-radius:10px;color:#fff;
+  font-size:1.4rem;text-align:center;width:150px;padding:9px;outline:none}
+#go2{background:__COLOR__;border:none;border-radius:10px;color:#0a0714;font-weight:900;
+  font-size:1rem;padding:12px 22px;margin-left:10px;cursor:pointer;letter-spacing:.1em}
+#bline{position:absolute;left:50%;bottom:165px;transform:translateX(-50%);max-width:80%;
+  background:rgba(10,7,18,.85);border:1px solid __COLOR__;border-radius:12px;
+  padding:9px 15px;font-size:.95rem;color:#efe9ff;text-align:center;
+  box-shadow:0 0 20px __COLOR__44}
+#endcard{display:none;position:absolute;inset:0;z-index:6;align-items:center;justify-content:center;
+  flex-direction:column;background:rgba(3,2,7,.72);text-align:center;padding:0 8%}
+#endtitle{font-size:2.2rem;font-weight:900;letter-spacing:.16em;color:#fff;text-shadow:0 0 24px __COLOR__}
+#endsub{margin-top:10px;color:#b9b4d6;font-size:1rem}
+#coachlink{display:inline-block;margin-top:22px;pointer-events:auto;text-decoration:none;
+  background:__COLOR__;color:#0a0714;font-weight:900;letter-spacing:.12em;
+  border-radius:10px;padding:13px 26px;font-size:1rem;box-shadow:0 0 24px __COLOR__66}
+/* ---- PHONE: same arena rules as the Collector's ---------------------- */
+@media (max-width:700px){
+  #btitle{top:10px;left:12px;font-size:1.02rem;letter-spacing:.1em;
+    max-width:calc(100% - 100px)}
+  #bsub{top:32px;left:13px;font-size:.6rem;letter-spacing:.05em;
+    max-width:calc(100% - 100px);line-height:1.25}
+  #lives{top:11px;right:12px;gap:6px}
+  .pip{width:16px;height:16px}
+  /* the score gets its own line rather than colliding with the subtitle */
+  #streakbox{top:50px;left:13px;right:auto;text-align:left;
+    font-size:.66rem;letter-spacing:.06em}
+  #bline{bottom:auto;top:70px;max-width:calc(100% - 24px);font-size:.8rem;
+    padding:7px 11px;line-height:1.32;display:-webkit-box;-webkit-line-clamp:4;
+    -webkit-box-orient:vertical;overflow:hidden}
+  #qbox{bottom:58px;width:calc(100% - 24px)}
+  #qq{font-size:1.45rem;margin-bottom:6px}
+  #ans{width:100%;box-sizing:border-box;font-size:1.25rem;padding:11px;margin:0 0 9px}
+  #go2{display:block;width:100%;margin:0;height:48px;padding:0;font-size:.92rem}
+  #endcard{padding:0 6%}
+  #endtitle{font-size:1.5rem;letter-spacing:.1em}
+  #endsub{font-size:.92rem;line-height:1.4}
+  #coachlink{margin-top:18px;padding:14px 20px;font-size:.92rem}
+}
+@media (max-width:900px) and (max-height:460px){
+  #bsub{display:none}
+  #bline{top:auto;bottom:8px;left:62px;right:auto;transform:none;
+    max-width:38%;font-size:.75rem}
+  #qbox{bottom:10px;left:auto;right:12px;transform:none;width:46%}
+  #qq{font-size:1.2rem}
+  #go2{height:42px}
+}
+</style>
+<div id="stage">
+  <div id="v"></div><div id="vig2"></div>
+  <div id="hud2">
+    <div id="btitle">__MONSTER__</div>
+    <div id="bsub">LIEUTENANT OF THE COLLECTOR - WAR CLOCK 90s</div>
+    <div id="lives"><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+    <div id="streakbox">STREAK 0 &middot; SCORE 0</div>
+    <div id="bline">Ninety seconds, __HERO__. The Collector sent me to soften you up. Keep the numbers moving or lose them.</div>
+    <div id="qbox">
+      <div id="qq"></div>
+      <div id="timer"><div id="tfill"></div></div>
+      <input id="ans" inputmode="numeric" autocomplete="off">
+      <button id="go2">STRIKE</button>
+    </div>
+  </div>
+  <div id="endcard">
+    <div id="endtitle"></div>
+    <div id="endsub"></div>
+    <a id="coachlink" target="_blank" rel="opener">GET COACHED BY PROMETHEUS LAB</a>
+  </div>
+</div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  // Gemma's whisper sits above this arena and the retreat below it, so the
+  // drill takes what is left of the screen - a 90 second clock must not need
+  // scrolling to see the question.
+  GWB.holdFrame('auto', 430);
+  // Press a button in the parent rather than opening a tab: this frame is
+  // sandboxed without allow-top-navigation, so a link is the only thing that
+  // could leave it, and a link means a second tab.
+  function relay(key){
+    try{ var b=window.parent.document.querySelector('.st-key-'+key+' button');
+      if(b){ b.click(); return true; } }catch(e){}
+    return false;
+  }
+  function relaySet(key, value){
+    try{
+      var el=window.parent.document.querySelector('.st-key-'+key+' input');
+      if(!el) return false;
+      var set=Object.getOwnPropertyDescriptor(
+        window.parent.HTMLInputElement.prototype,'value').set;
+      set.call(el, value);
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      return true;
+    }catch(e){ return false; }
+  }
+  // procedural battle audio (no files): thud on hit, resolution chord at the end
+  let __actx=null;
+  function __a(){ if(!__actx) __actx=new (window.AudioContext||window.webkitAudioContext)(); return __actx; }
+  function __gmMuted(){ try{ return localStorage.getItem('gm_mute')==='1'; }catch(e){ return false; } }
+  function sndThud(){ if(__gmMuted()) return; try{ const c=__a(),o=c.createOscillator(),g=c.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(110,c.currentTime);
+    o.frequency.exponentialRampToValueAtTime(38,c.currentTime+0.25);
+    g.gain.setValueAtTime(0.5,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.3);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.32);}catch(e){} }
+  function sndEnd(won){ if(__gmMuted()) return; try{ const c=__a();
+    const freqs=won?[523.25,659.25,783.99,1046.5]:[220,207.65,196,185];
+    freqs.forEach((f,i)=>{ const o=c.createOscillator(),g=c.createGain();
+      o.type=won?'triangle':'sawtooth'; o.frequency.value=f; g.gain.value=0.0;
+      o.connect(g); g.connect(c.destination); o.start(c.currentTime+i*0.12);
+      g.gain.setValueAtTime(0.12,c.currentTime+i*0.12);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+i*0.12+(won?0.9:1.4));
+      o.stop(c.currentTime+i*0.12+1.5); });}catch(e){} }
+
+  // ---- the "correct" cue: only the first beat of the clip, so a fast run of
+  // right answers never turns into overlapping four-second stings ----
+  let __cueBuf=null;
+  (function(){
+    fetch((window.__ORIGIN||'')+'/app/static/audio/correct.mp3')
+      .then(r=>r.arrayBuffer())
+      .then(a=>__a().decodeAudioData(a))
+      .then(b=>{ __cueBuf=b; })
+      .catch(function(){});
+  })();
+  function sndRight(){
+    if(__gmMuted()||!__cueBuf) return;
+    try{
+      const c=__a(), s=c.createBufferSource(), g=c.createGain();
+      s.buffer=__cueBuf; s.connect(g); g.connect(c.destination);
+      const DUR=1.0;
+      g.gain.setValueAtTime(0.85,c.currentTime);
+      g.gain.setValueAtTime(0.85,c.currentTime+DUR-0.16);
+      g.gain.linearRampToValueAtTime(0.0001,c.currentTime+DUR);
+      s.start(c.currentTime,0,DUR);
+    }catch(e){}
+  }
+
+  const W=innerWidth,H=innerHeight;
+  const r=new THREE.WebGLRenderer({antialias:true});
+  r.setSize(W,H); r.outputEncoding=THREE.sRGBEncoding; r.setClearColor(0x050308);
+  document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene(); sc.fog=new THREE.FogExp2(0x050308,0.05);
+  const cam=new THREE.PerspectiveCamera(42,W/Math.max(H,1),0.1,80);
+  // framing answers the viewport, not a guess about the window (GWB.frame)
+  const EYE={x:0,y:2.6,z:7.5}, AIM={x:0,y:2.4,z:0};
+  function place(){
+    const f=GWB.frame(cam,42,1.55,{power:0.32,maxFov:50,maxDist:1.0});
+    cam.position.set(AIM.x+(EYE.x-AIM.x)*f, AIM.y+(EYE.y-AIM.y)*f,
+                     AIM.z+(EYE.z-AIM.z)*f);
+    const off=(innerWidth>innerHeight*1.4 && innerHeight<=470)
+      ? 0.22*2*Math.tan(cam.fov*Math.PI/360)*Math.abs(EYE.z-AIM.z)*cam.aspect : 0;
+    cam.lookAt(AIM.x+off, AIM.y+(GWB.isPhone()?0.5:0), AIM.z);
+  }
+  place();
+  addEventListener('resize',function(){
+    cam.aspect=innerWidth/Math.max(innerHeight,1);
+    r.setSize(innerWidth,innerHeight); place();
+  });
+  // How much room the fighter actually has, measured off the strips the HUD
+  // reserves rather than assumed: the taunt owns the top of the arena and the
+  // question box owns the bottom, and on a phone what is left between them is
+  // a fraction of what a desktop window leaves.
+  function visHAt(y){
+    const d=cam.position.distanceTo(new THREE.Vector3(0,y,0));
+    return 2*Math.tan(cam.fov*Math.PI/360)*d;
+  }
+  function visWAt(y){ return visHAt(y)*cam.aspect; }
+  // sideways on a phone the taunt and the question sit side by side along the
+  // bottom instead of stacking, so the strips are read by where they actually
+  // are rather than by where portrait puts them
+  function sideways(){ return innerWidth>innerHeight*1.4 && innerHeight<=470; }
+  function bandAt(y){
+    const hh=innerHeight||1, pad=Math.max(6,hh*0.015);
+    const bl=document.getElementById('bline').getBoundingClientRect();
+    const qb=document.getElementById('qbox').getBoundingClientRect();
+    let top=0, bot=hh;
+    if(bl.top<hh*0.5) top=Math.max(top,bl.bottom);
+    if(qb.bottom>hh*0.5) bot=Math.min(bot,qb.top);
+    let f=(bot-top-2*pad)/hh;
+    if(!(f>0.22)) f=0.22;
+    if(sideways()) f=Math.min(f,0.66);
+    return 0.88*f*visHAt(y);   // never let a limb touch either strip
+  }
+  const tint=new THREE.Color("__COLOR__");
+  sc.add(new THREE.AmbientLight(0x9aa0ff,0.5));
+  const key=new THREE.SpotLight(0xcfd4ff,2.6,50,Math.PI/3,0.5); key.position.set(0,12,6); sc.add(key);
+  const under=new THREE.PointLight(tint,2.2,20); under.position.set(0,0.4,1.5); sc.add(under);
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(30,48),
+    new THREE.MeshStandardMaterial({color:0x0a0712,metalness:.4,roughness:.85}));
+  floor.rotation.x=-Math.PI/2; sc.add(floor);
+  let mix=null,obj=null,entrance=0,actIdle=null,actHit=null;
+  new THREE.GLTFLoader().load((window.__ORIGIN||'')+"__MODEL__",(g)=>{
+    obj=g.scene;
+    // The arena reserves three bands: the taunt and streak sit up top, the
+    // question box sits at the bottom, and the lieutenant owns the middle. So
+    // rather than dropping every model at a fixed height - which puts a tall
+    // model's head straight through the speech bubble - measure it and hang it
+    // from a fixed CEILING, using the same blended size metric as the citadel.
+    const MID_Y=2.5;
+    const b=new THREE.Box3().setFromObject(obj), sz=b.getSize(new THREE.Vector3());
+    const eff=Math.max(sz.y,0.62*Math.max(sz.x,sz.z),0.001);
+    obj.userData.fullScale=Math.min((GWB.isPhone()?4.8:3.4)/eff,
+                                    bandAt(MID_Y)/Math.max(sz.y,0.001),
+                                    0.92*visWAt(MID_Y)/Math.max(sz.x,0.001));
+    obj.scale.setScalar(obj.userData.fullScale);
+    const b2=new THREE.Box3().setFromObject(obj), c=b2.getCenter(new THREE.Vector3());
+    obj.scale.setScalar(0.15);                    // the entrance grows it back
+    obj.position.set(-c.x,MID_Y-c.y,-c.z-1); sc.add(obj);
+    cam.lookAt(0,MID_Y,0);
+    if(g.animations&&g.animations.length){
+      mix=new THREE.AnimationMixer(obj);
+      const fi=g.animations.find(a=>/Flying_Idle/.test(a.name))
+             ||g.animations.find(a=>/idle/i.test(a.name))||g.animations[0];
+      const hb=g.animations.find(a=>/Headbutt|Punch/.test(a.name));
+      actIdle=mix.clipAction(fi); actIdle.timeScale=0.85; actIdle.play();
+      if(hb){ actHit=mix.clipAction(hb); actHit.setLoop(THREE.LoopOnce); actHit.timeScale=1.0; }
+    }
+    entrance=1;
+  });
+  function attack(){
+    sndThud();
+    document.getElementById('stage').classList.add('shake');
+    setTimeout(()=>document.getElementById('stage').classList.remove('shake'),380);
+    if(actHit&&actIdle){ actHit.reset().fadeIn(0.1).play(); actIdle.fadeOut(0.1);
+      setTimeout(()=>{ actHit.fadeOut(0.2); actIdle.reset().fadeIn(0.2).play(); },900); }
+  }
+  // ---- skirmish engine: 90s war clock, streaks, three lanes ----
+  const LANE="__LANE__", TOTAL=90;
+  const LINES_HIT=["Snap. That one is ours now.","Wrong. The Collector pays me per mistake.",
+    "Slower than the rumors said, __HERO__.","Feel that? That was a number leaving you."];
+  const LINES_OK=["Tch. Faster than you look.","Keep it. For now.","One snare. Anyone can do one snare.",
+    "The Collector will not be pleased with me, __HERO__."];
+  function ri(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
+  function evenIn(a,b){ let n=ri(a,b); if(n%2) n+=(n<b?1:-1); return n; }
+  function tier(s){ return s<3?0:(s<6?1:2); }
+  function genDoubles(t){
+    if(t===0){ const n=ri(6,30); return {txt:"double "+n,key:"double "+n,ans:2*n}; }
+    if(t===1){
+      if(Math.random()<0.5){ const n=ri(31,80); return {txt:"double "+n,key:"double "+n,ans:2*n}; }
+      const n=evenIn(40,160); return {txt:"half of "+n,key:"half "+n,ans:n/2};
+    }
+    const p=Math.random();
+    if(p<0.4){ const n=ri(13,26); return {txt:"4 x "+n,key:"4x"+n,ans:4*n}; }
+    if(p<0.7){ const n=evenIn(100,300); return {txt:"half of "+n,key:"half "+n,ans:n/2}; }
+    const n=ri(60,140); return {txt:"double "+n,key:"double "+n,ans:2*n};
+  }
+  function genNines(t){
+    if(t===0){
+      if(Math.random()<0.5){ const n=ri(2,6); return {txt:"9 x "+n,key:"9x"+n,ans:9*n}; }
+      const n=ri(12,40); return {txt:n+" + 9",key:n+"+9",ans:n+9};
+    }
+    if(t===1){
+      const p=Math.random();
+      if(p<0.35){ const n=ri(3,12); return {txt:"9 x "+n,key:"9x"+n,ans:9*n}; }
+      if(p<0.6){ const n=ri(20,80);
+        if(Math.random()<0.5) return {txt:n+" + 9",key:n+"+9",ans:n+9};
+        return {txt:n+" - 9",key:n+"-9",ans:n-9}; }
+      const n=ri(5,60); return {txt:"19 + "+n,key:"19+"+n,ans:19+n};
+    }
+    const p=Math.random();
+    if(p<0.4){ const n=ri(6,65); return {txt:"29 + "+n,key:"29+"+n,ans:29+n}; }
+    if(p<0.7){ const n=ri(30,95); return {txt:n+" - 9",key:n+"-9",ans:n-9}; }
+    const n=ri(7,12); return {txt:"9 x "+n,key:"9x"+n,ans:9*n};
+  }
+  function crossPair(lo,hi){
+    let a,b,i=0;
+    do{ a=ri(lo,hi); b=ri(lo,hi); i++; }
+    while(i<200&&((a%10)+(b%10)<10||a%10===0||b%10===0));
+    return [a,b];
+  }
+  function genSplit(t){
+    if(t===0){ const p=crossPair(12,48); return {txt:p[0]+" + "+p[1],key:p[0]+"+"+p[1],ans:p[0]+p[1]}; }
+    if(t===1){ const p=crossPair(25,78); return {txt:p[0]+" + "+p[1],key:p[0]+"+"+p[1],ans:p[0]+p[1]}; }
+    if(Math.random()<0.5){ const p=crossPair(35,89); return {txt:p[0]+" + "+p[1],key:p[0]+"+"+p[1],ans:p[0]+p[1]}; }
+    let a,b,i=0;
+    do{ a=ri(41,95); b=ri(13,a-12); i++; }
+    while(i<200&&((b%10)<=(a%10)||b%10===0));
+    if((b%10)<=(a%10)||b%10===0){ a=73; b=27; }
+    return {txt:a+" - "+b,key:a+"-"+b,ans:a-b};
+  }
+  function gen(){
+    const t=tier(streak);
+    if(LANE==="doubles") return genDoubles(t);
+    if(LANE==="nines") return genNines(t);
+    return genSplit(t);
+  }
+  let lives=3,score=0,streak=0,best=0,cur=null,qShown=0,over=false;
+  const misses=[],rts=[];
+  let clock=TOTAL;
+  const warId=setInterval(()=>{
+    clock-=0.1;
+    document.getElementById('tfill').style.width=Math.max(0,clock/TOTAL*100)+'%';
+    if(clock<=0) end(true);
+  },100);
+  function hud(){
+    document.getElementById('streakbox').innerHTML='STREAK '+streak+' &middot; SCORE '+score;
+  }
+  function say(msg){ document.getElementById('bline').textContent=msg; }
+  function newQ(){
+    if(over) return;
+    cur=gen();
+    document.getElementById('qq').textContent=cur.txt+" = ?";
+    const inp=document.getElementById('ans'); inp.value=''; inp.focus();
+    qShown=performance.now();
+  }
+  function clockRt(){ rts.push(Math.round((performance.now()-qShown)/100)*100); }
+  function miss(prefix){
+    if(over) return;
+    clockRt(); misses.push(cur.key);
+    lives--; streak=0; hud(); attack();
+    const pips=document.querySelectorAll('.pip:not(.gone)');
+    if(pips.length) pips[pips.length-1].classList.add('gone');
+    say((prefix||"")+LINES_HIT[Math.floor(Math.random()*LINES_HIT.length)]+"  (answer: "+cur.ans+")");
+    if(lives<=0) return end(false);
+    setTimeout(newQ,900);
+  }
+  function hit(){
+    if(over) return;
+    clockRt(); sndRight(); score++; streak++; if(streak>best) best=streak; hud();
+    say(LINES_OK[Math.floor(Math.random()*LINES_OK.length)]);
+    setTimeout(newQ,400);
+  }
+  function submit(){
+    if(over||!cur) return;
+    const v=parseFloat(document.getElementById('ans').value);
+    if(isNaN(v)) return miss("An empty strike. ");
+    (v===cur.ans)?hit():miss("");
+  }
+  document.getElementById('go2').onclick=submit;
+  document.getElementById('ans').addEventListener('keydown',e=>{ if(e.key==='Enter') submit(); });
+  function end(won){
+    if(over) return;
+    over=true; clearInterval(warId);
+    const ec=document.getElementById('endcard');
+    sndEnd(won); ec.style.display='flex';
+    document.getElementById('endtitle').textContent= won?"CLOCK SURVIVED":"OVERRUN";
+    document.getElementById('endsub').textContent= won
+      ? "\"The clock saved you, __HERO__. Not your speed.\"  Score: "+score+"  Best streak: "+best
+      : "\"Three cracks and you fell. The Collector thanks you for the donation.\"  Score: "+score+"  Best streak: "+best;
+    document.getElementById('qbox').style.display='none';
+    let base='/';
+    try{ base=window.parent.location.pathname||'/'; }
+    catch(e){ try{ base=new URL(document.referrer).pathname||'/'; }catch(_){} }
+    var cl=document.getElementById('coachlink');
+    cl.href=
+      base+'?coach='+LANE
+      +'&misses='+encodeURIComponent(misses.slice(0,8).join(','))
+      +'&score='+score
+      +'&streak='+best
+      +'&hero='+encodeURIComponent(localStorage.getItem('gwb_hero')||'');
+    cl.onclick=function(ev){
+      var payload=JSON.stringify({lane:LANE, misses:misses.slice(0,8),
+        score:score, streak:best,
+        hero:(localStorage.getItem('gwb_hero')||'')});
+      if(relaySet('relay_coach', payload)){
+        setTimeout(function(){ relay('relay_coach_go'); },120);
+        ev.preventDefault();
+      }
+    };
+  }
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    if(mix) mix.update(dt);
+    if(obj){
+      if(entrance>0&&entrance<2){ entrance+=dt*0.55;
+        const fs=obj.userData.fullScale;
+        const e2=Math.min(1,Math.max(0,(entrance-1)*1.4+0.4));
+        obj.scale.setScalar(0.15+(fs-0.15)*e2);
+        obj.position.y=3.2-1.4*e2;
+      }
+      obj.position.x=Math.sin(tt*0.35)*0.5;
+      obj.rotation.y=Math.sin(tt*0.3)*0.2;
+    }
+    r.render(sc,cam); })(0);
+  setTimeout(newQ,2200);
+});
+</script>
+"""
+
+
+def _skirmish_html(name, lane, monster_model, color):
+    lieutenants = {"doubles": "Twinfang", "nines": "The Niner", "split": "Splitjaw"}
+    html = (_SKIRMISH_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "GLTFLoader.js"]))
+            .replace("__MODEL__", monster_model)
+            .replace("__COLOR__", color)
+            .replace("__MONSTER__", lieutenants.get(lane, "Lieutenant").upper())
+            .replace("__LANE__", lane))
+    return html.replace("__HERO__", _hescape(name))
+
+
+_LIEUTENANTS = {
+    "doubles": {"drills": "doubling and halving", "monster": "Twinfang", "model": "/app/static/monsters/frog.glb",
+                "color": "#4ade80",
+                "whisper": "doubling: to double, add the number to itself; to multiply by 4, double twice. Halving undoes it."},
+    "nines": {"drills": "nines, fast", "monster": "The Niner", "model": "/app/static/monsters/alien.glb",
+              "color": "#ffd166",
+              "whisper": "nines: multiply by 10, then subtract the number once. Adding 9 is adding 10 then stepping back one."},
+    "split": {"drills": "making tens", "monster": "Splitjaw", "model": "/app/static/monsters/fish.glb",
+              "color": "#35d0c0",
+              "whisper": "make a ten: split the smaller number to complete a ten first. 47+38 is 47+3, then +35."},
+}
+
+
+def _coach_relay():
+    """The coach needs the run's numbers, which live in the arena's JavaScript.
+    A hidden field carries them over as JSON so the arena does not have to open
+    a tab to hand them to a URL."""
+    with st.container(key="relay_coach"):
+        payload = st.text_input("coach relay", key="relay_coach_payload",
+                                label_visibility="collapsed")
+
+    def go():
+        try:
+            d = json.loads(st.session_state.get("relay_coach_payload") or "{}")
+        except ValueError:
+            d = {}
+        st.session_state.coach_data = {
+            "lane": d.get("lane") or st.session_state.get("skirmish_lane", "doubles"),
+            "misses": [m for m in (d.get("misses") or []) if m][:8],
+            "score": str(d.get("score", "0")),
+            "streak": str(d.get("streak", "0")),
         }
+        if (d.get("hero") or "").strip():
+            h = d["hero"].strip()[:24]
+            st.session_state.player_name = h[:1].upper() + h[1:]
+        st.session_state.stage = "coach"
 
-        if is_vacuum_box:
-            # Grade the NUMBER with real physics, not string matching.
-            force_is_correct = check_vacuum_box_force(student_force)
-            new_messages.append({
-                "id": str(uuid.uuid4()),
-                "kind": "info" if force_is_correct else "warning",
-                "text": vacuum_box_feedback(student_force),
-            })
+    with st.container(key="relay_coach_go"):
+        st.button("Get coached", key="relay_coach_btn", on_click=go)
+    return payload
 
-        # -------------------------------------------------------------
-        # Decide the explanation-quality verdict. This applies to ALL
-        # THREE Anomalies -- even vacuum_box, which additionally has
-        # its own separate real numeric force check above.
-        # -------------------------------------------------------------
-        # ---------------------------------------------------------------
-        # PHASE 5: judge_explanation() now returns TWO things from its
-        # single API call: the verdict word (same as Phase 4) AND a
-        # short in-character line of dialogue from the "ship's
-        # diagnostic AI" persona. Whenever we're using the mock path
-        # (checkbox checked, or the real call fails below), there is no
-        # real dialogue to show, so we use the same hardcoded generic
-        # line from mock_in_character_response() in both of those cases.
-        # ---------------------------------------------------------------
-        if use_mock:
-            explanation_verdict = fake_verdict
-            tutor_response = mock_in_character_response()
+
+def skirmish_stage():
+    lane = st.session_state.get("skirmish_lane", "doubles")
+    lt = _LIEUTENANTS[lane]
+    _coach_relay()
+    full_bleed()
+    # Gemma whispers the mental strategy before the war (cached per lane)
+    wkey = f"whisper_{lane}"
+    if wkey not in st.session_state:
+        try:
+            from gemma_client import ask_gemma, plainify
+            st.session_state[wkey] = plainify(ask_gemma(
+                "TASK: explain\nIn TWO short sentences, teach a Grade 9 student the "
+                f"mental-math snare of {lt['whisper']} Plain text, encouraging, no examples "
+                "longer than one, address them as a warrior sharpening a blade.",
+                max_new_tokens=90))
+        except Exception:
+            st.session_state[wkey] = lt["whisper"]
+    # On a phone this tip would take a third of the screen away from a drill
+    # that is on a 90 second clock, so there it becomes a short scrolling
+    # panel - every word still there, none of the height.
+    st.markdown('<style>@media (max-width:700px){'
+                '[class*="st-key-whisper_box"] .gwb-note{max-height:104px;'
+                'overflow:auto;font-size:.86rem;line-height:1.35}}</style>',
+                unsafe_allow_html=True)
+    with st.container(key=f"whisper_box_{lane}"):
+        note("PROMETHEUS LAB WHISPERS A WAR SECRET", esc_note(st.session_state[wkey]))
+    components.html(_skirmish_html(st.session_state.get("player_name", "Challenger"),
+                                   lane, lt["model"], lt["color"]),
+                    height=560, scrolling=False)
+    mid = st.columns([2, 2, 2])
+    mid[1].button("Retreat to the nexus", key="sk_flee", on_click=back_to_map,
+                  use_container_width=True)
+
+
+def coach_stage():
+    d = st.session_state.get("coach_data", {})
+    lane = d.get("lane", "doubles")
+    lt = _LIEUTENANTS[lane]
+    st.markdown('<div class="gwb-kicker">After-battle debrief</div>', unsafe_allow_html=True)
+    st.title("Prometheus Lab reads your battle")
+    misses = [m for m in d.get("misses", []) if m]
+    ck = f"coach_{lane}_{d.get('score')}_{len(misses)}"
+    if ck not in st.session_state.get("skirmish_seen", set()):
+        st.session_state.setdefault("skirmish_seen", set()).add(ck)
+        st.session_state.setdefault("skirmish_log", []).append(
+            {"lane": lane, "score": d.get("score"), "streak": d.get("streak"),
+             "misses": misses})
+        try:
+            bests = st.session_state.setdefault("bests", {})
+            bests[lane] = max(int(bests.get(lane, 0)), int(d.get("score") or 0))
+        except (TypeError, ValueError):
+            pass
+        st.session_state.pop("lt_pick", None)   # new evidence, fresh decision
+    if ck not in st.session_state:
+        try:
+            from gemma_client import ask_gemma, plainify
+            st.session_state[ck] = plainify(ask_gemma(
+                "TASK: coach\nYou are a sharp, kind mental-math coach. A Grade 9 student "
+                f"named {st.session_state.get('player_name', 'Challenger')} just fought a "
+                f"90-second speed battle on the skill: {lane}. Score {d.get('score')} correct, "
+                f"best streak {d.get('streak')}. The exact questions they MISSED: "
+                f"{', '.join(misses) if misses else 'none - a clean sweep'}.\n"
+                "In plain text (no LaTeX): (1) name the specific pattern you see in those "
+                "misses in one sentence; (2) teach the ONE mental snare that fixes it, in two "
+                "sentences; (3) give a mini drill of exactly three practice questions of that "
+                "type (questions only, no answers). If they missed nothing, congratulate them "
+                "and raise the challenge with three harder questions of the same skill.",
+                max_new_tokens=320))
+        except Exception:
+            st.session_state[ck] = ("Your speed is building. Drill the ones that got away: "
+                                    + (", ".join(misses) if misses else "raise the difficulty next run."))
+    with st.container(border=True):
+        st.markdown(esc(st.session_state[ck]))
+    c = st.columns(3)
+    c[0].button("Rematch " + lt["monster"], key="coach_rematch",
+                on_click=lambda: st.session_state.update(stage="skirmish", skirmish_lane=lane),
+                use_container_width=True)
+    c[1].button("Back to the nexus", key="coach_home", on_click=back_to_map,
+                use_container_width=True)
+
+
+_FINALE_TEMPLATE = r"""
+<style>
+html,body{margin:0;background:#050308;overflow:hidden;font-family:'Trebuchet MS',sans-serif}
+#stage{position:relative;width:100%;height:100vh}
+#hud3{position:absolute;inset:0;z-index:5;pointer-events:none;color:#f3e5ab;text-align:center}
+#ftitle{position:absolute;top:7%;width:100%;font-size:2rem;font-weight:900;letter-spacing:.22em;
+  text-shadow:0 0 24px rgba(226,192,125,.8);opacity:0;transition:opacity 3s}
+#fsub{position:absolute;bottom:9%;width:100%;font-size:1rem;color:#d9ceb4;opacity:0;transition:opacity 3s}
+@media (max-width:700px){
+  #ftitle{top:5%;font-size:1.25rem;letter-spacing:.14em;padding:0 14px;
+    box-sizing:border-box}
+  #fsub{bottom:6%;font-size:.88rem;line-height:1.4;padding:0 16px;
+    box-sizing:border-box}
+}
+</style>
+<div id="stage"><div id="v"></div>
+  <div id="hud3">
+    <div id="ftitle">THE SEAL BREAKS</div>
+    <div id="fsub">Five snares defeated. The gate opens, __HERO__ — the one they kept from you steps into the light.</div>
+  </div>
+</div>
+<script>
+(function(){ let o='';
+  try{ o=window.parent.location.origin; }catch(e){ try{ o=new URL(document.referrer).origin; }catch(_){} }
+  window.__ORIGIN=o; })();
+</script>
+__VENDOR__
+<script>
+window.addEventListener('load', function(){
+  // one button under the scene; give the rest of the phone screen to the gate
+  GWB.holdFrame('auto', 380);
+  const W=innerWidth,H=innerHeight;
+  const r=new THREE.WebGLRenderer({antialias:true});
+  r.setSize(W,H); r.outputEncoding=THREE.sRGBEncoding;
+  r.toneMapping=THREE.ACESFilmicToneMapping; r.toneMappingExposure=0.9;
+  r.setClearColor(0x050308);
+  document.getElementById('v').appendChild(r.domElement);
+  const sc=new THREE.Scene(); sc.fog=new THREE.FogExp2(0x0d1424,0.02);
+  const cam=new THREE.PerspectiveCamera(46,W/Math.max(H,1),0.1,120);
+  // The gate is 28 units of wall wide - the widest subject after the citadel -
+  // so a narrow window has to open up hard or it sees only the doors.
+  const EYE={x:0,y:4,z:26}, AIM={x:0,y:4,z:0};
+  function place(){
+    const f=GWB.frame(cam,46,1.55,{power:0.72,maxFov:64,maxDist:1.5});
+    cam.position.set(AIM.x+(EYE.x-AIM.x)*f, AIM.y+(EYE.y-AIM.y)*f,
+                     AIM.z+(EYE.z-AIM.z)*f);
+    cam.lookAt(AIM.x,AIM.y,AIM.z);
+  }
+  place();
+  addEventListener('resize',function(){
+    cam.aspect=innerWidth/Math.max(innerHeight,1);
+    r.setSize(innerWidth,innerHeight); place();
+  });
+  sc.add(new THREE.AmbientLight(0x141c30,0.9));
+  const moon=new THREE.DirectionalLight(0x9fb6e8,1.0); moon.position.set(-20,30,-10); sc.add(moon);
+
+  const stone=new THREE.MeshStandardMaterial({color:0x2a2d36,roughness:.7,metalness:.2});
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),
+    new THREE.MeshStandardMaterial({color:0x121722,roughness:.9}));
+  ground.rotation.x=-Math.PI/2; sc.add(ground);
+
+  // the gate wall
+  const wallL=new THREE.Mesh(new THREE.BoxGeometry(14,16,2),stone); wallL.position.set(-10.5,8,0); sc.add(wallL);
+  const wallR=new THREE.Mesh(new THREE.BoxGeometry(14,16,2),stone); wallR.position.set(10.5,8,0); sc.add(wallR);
+  const arch=new THREE.Mesh(new THREE.BoxGeometry(8,4,2),stone); arch.position.set(0,14,0); sc.add(arch);
+
+  // double doors
+  const doorMat=new THREE.MeshStandardMaterial({color:0x2b1e16,roughness:.8});
+  const doorL=new THREE.Group(), doorR=new THREE.Group();
+  const dL=new THREE.Mesh(new THREE.BoxGeometry(3.5,12,0.5),doorMat); dL.position.x=1.75; doorL.add(dL);
+  const dR=new THREE.Mesh(new THREE.BoxGeometry(3.5,12,0.5),doorMat); dR.position.x=-1.75; doorR.add(dR);
+  doorL.position.set(-3.5,6,0); doorR.position.set(3.5,6,0);
+  sc.add(doorL); sc.add(doorR);
+
+  // light inside the keep
+  const innerGlow=new THREE.PointLight(0xffe9b0,0,40); innerGlow.position.set(0,6,-4); sc.add(innerGlow);
+
+  // the freed one: a glowing faceless figure (placeholder until the hero model arrives)
+  const figMat=new THREE.MeshStandardMaterial({color:0xffe9b0,emissive:0xffd98c,
+    emissiveIntensity:1.2,roughness:.4});
+  const fig=new THREE.Group();
+  // The vendored three is r128, which has no CapsuleGeometry - and `new
+  // THREE.CapsuleGeometry ? ... : ...` does not test for it, it CONSTRUCTS it,
+  // so the whole scene died here before it ever drew a frame.
+  const Capsule=THREE.CapsuleGeometry||null;
+  const body=new THREE.Mesh(
+    Capsule?new Capsule(0.7,1.6,8,16):new THREE.CylinderGeometry(0.7,0.7,2.6,16),
+    figMat);
+  body.position.y=2.2; fig.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.55,20,20),figMat);
+  head.position.y=4.0; fig.add(head);
+  const halo=new THREE.PointLight(0xffe9b0,2.5,16); halo.position.y=3.4; fig.add(halo);
+  fig.position.set(0,0,-3); fig.scale.setScalar(0.001); sc.add(fig);
+
+  // golden particles
+  const N=220, g2=new THREE.BufferGeometry(), pp=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ pp[i*3]=(Math.random()-0.5)*30; pp[i*3+1]=Math.random()*14;
+    pp[i*3+2]=(Math.random()-0.5)*20; }
+  g2.setAttribute('position',new THREE.BufferAttribute(pp,3));
+  const stars=new THREE.Points(g2,new THREE.PointsMaterial({color:0xffd98c,size:0.14,
+    transparent:true,opacity:0.0,blending:THREE.AdditiveBlending}));
+  sc.add(stars);
+
+  // gentle victory chord (procedural)
+  function chord(){ try{
+    const c=new (window.AudioContext||window.webkitAudioContext)();
+    [261.6,329.6,392.0,523.25].forEach((f,i)=>{
+      const o=c.createOscillator(),g=c.createGain();
+      o.type='triangle'; o.frequency.value=f; g.gain.value=0;
+      o.connect(g); g.connect(c.destination); o.start(c.currentTime+i*0.25);
+      g.gain.setValueAtTime(0.1,c.currentTime+i*0.25);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+i*0.25+2.4);
+      o.stop(c.currentTime+i*0.25+2.5); });}catch(e){} }
+
+  // cinematic timeline
+  setTimeout(()=>{ gsap.to(doorL.rotation,{y:-1.9,duration:4,ease:"power2.inOut"});
+    gsap.to(doorR.rotation,{y:1.9,duration:4,ease:"power2.inOut"});
+    gsap.to(innerGlow,{intensity:5,duration:4}); chord(); },1200);
+  setTimeout(()=>{ gsap.to(fig.scale,{x:1,y:1,z:1,duration:2.5,ease:"back.out(1.4)"});
+    gsap.to(fig.position,{z:5,duration:6,ease:"power1.inOut"});
+    gsap.to(stars.material,{opacity:0.85,duration:3});
+    document.getElementById('ftitle').style.opacity=1; },3600);
+  setTimeout(()=>{ document.getElementById('fsub').style.opacity=1; },6500);
+
+  let pt=0;
+  (function loop(t){ requestAnimationFrame(loop);
+    const tt=(t||0)*0.001, dt=Math.min(0.05,tt-pt); pt=tt;
+    fig.position.y=Math.sin(tt*1.2)*0.15;
+    fig.rotation.y=Math.sin(tt*0.4)*0.2;
+    stars.rotation.y+=dt*0.03;
+    r.render(sc,cam); })(0);
+});
+</script>
+"""
+
+
+def _finale_html(name):
+    return (_FINALE_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "gsap.min.js"]))
+            .replace("__HERO__", _hescape(name)))
+
+
+def finale_stage():
+    full_bleed()
+    components.html(_finale_html(st.session_state.get("player_name", "Challenger")),
+                    height=620, scrolling=False)
+    mid = st.columns([2, 2, 2])
+    mid[1].button("Return to the nexus", key="fin_home", on_click=back_to_map,
+                  use_container_width=True)
+
+
+def boss_stage():
+    full_bleed()
+    run = st.session_state.get("boss_run", 0)
+    components.html(_boss_html(st.session_state.get("player_name", "Challenger"))
+                    + f"<!-- run {run} -->", height=620, scrolling=False)
+    note("What this fight is",
+         "The Collector does not test new ideas - he tests the arithmetic you are "
+         "supposed to already own, and he tests it against a clock. Ten questions, "
+         "ninety seconds, three lives. <strong>Nothing here counts against your "
+         "quiz record</strong>: this is speed, not curriculum. Beat his timer and "
+         "he gives your basics back. Lose, and his lieutenants below are how you "
+         "buy them back - each one drills a single mental shortcut until it is "
+         "automatic, then Gemma reads your misses and coaches you before the rematch.")
+    st.markdown('<div style="text-align:center;letter-spacing:.14em;font-size:.72rem;'
+                'color:#8a86a8;font-weight:700;margin-top:6px">'
+                'HIS TIMER PUNISHES SLOW ARITHMETIC. HIS LIEUTENANTS ARE WHERE YOU GET FAST</div>',
+                unsafe_allow_html=True)
+
+    # Gemma directs the training: which drill is worth the student's time,
+    # judged on the skirmishes they have actually fought.
+    if "lt_pick" not in st.session_state:
+        log = st.session_state.get("skirmish_log", [])
+        evidence = [f"{r['lane']} drill: {r['score']} correct, best streak {r['streak']}"
+                    + (f", missed {', '.join(r['misses'][:4])}" if r.get("misses") else "")
+                    for r in log[-4:]]
+        never = [_LIEUTENANTS[l]["monster"] for l in _LIEUTENANTS
+                 if not any(r["lane"] == l for r in log)]
+        if never:
+            evidence.append("has never drilled against: " + ", ".join(never))
+        if not log:
+            evidence.insert(0, "has fought no speed drills at all yet")
+        with st.spinner("The Collector's lieutenants are being weighed..."):
+            st.session_state.lt_pick = agent.direct_next(
+                [{"key": k, "name": v["monster"], "focus": v["drills"]}
+                 for k, v in _LIEUTENANTS.items()],
+                evidence,
+                "The student is standing before the Collector, whose trial is timed. "
+                "Pick the ONE lieutenant whose speed drill will help them most.")
+    pick = st.session_state.get("lt_pick") or {}
+    if pick.get("why"):
+        note(f"Prometheus Lab sends you to {pick['name']}", esc_note(pick["why"]))
+
+    lc = st.columns(3)
+    for _i, (_lane, _lt) in enumerate(_LIEUTENANTS.items()):
+        chosen = pick.get("key") == _lane
+        lc[_i].button(f"{_lt['monster']} — {_lt['drills']}", key=f"lt_{_lane}",
+                      type="primary" if chosen else "secondary",
+                      on_click=lambda l=_lane: st.session_state.update(stage="skirmish", skirmish_lane=l),
+                      use_container_width=True)
+    mid = st.columns([2, 2, 2])
+    if "msession" in st.session_state:
+        mid[1].button("Back to training", key="boss_train", type="primary",
+                      on_click=lambda: st.session_state.update(stage="mastery"),
+                      use_container_width=True)
+    mid[1].button("Face him again", key="boss_again", type="primary",
+                  on_click=lambda: st.session_state.update(
+                      boss_run=st.session_state.get("boss_run", 0) + 1),
+                  use_container_width=True,
+                  help="Restart the speed trial from the top")
+    mid[1].button("Retreat to the nexus", key="boss_flee", on_click=back_to_map,
+                  use_container_width=True)
+    st.caption("Retreating is safe — nothing you have earned is lost, and the notes "
+               "written for your parents stay on the letters-home page.")
+
+
+def _encounter_html(mon, name):
+    # .replace, not .format: one line is Gemma-written, and stray braces in
+    # model output would crash str.format for the whole encounter
+    lines = [ln.replace("{name}", name) for ln in mon.get("lines", [mon.get("taunt", "...")])]
+    return (_ENCOUNTER_TEMPLATE
+            .replace("__VENDOR__", _vendor_js(["three.min.js", "GLTFLoader.js"]))
+            .replace("__MODEL__", mon["model"])
+            .replace("__COLOR__", mon["color"])
+            .replace("__NAME__", mon["monster"].upper())
+            .replace("__ECLIP__", mon.get("clip_ambient", ""))
+            .replace("__ETS__", str(mon.get("sp_ambient", 0.8)))
+            .replace("__LINES__", json.dumps(lines)))
+
+
+def encounter_stage():
+    strand = st.session_state.get("enc_strand")
+    mon = monster_for(strand)
+    if not mon:
+        back_to_map(); st.rerun()
+    full_bleed()
+    mem_key = f"enc_line_{strand}"
+    if mem_key not in st.session_state:
+        facts = {
+            "mastered_tricks": st.session_state.get("mastered_names", []),
+            "defeated_monsters": [r.get("monster", "") for r in st.session_state.get("relics", [])],
+            "last_score": st.session_state.get("last_score", ""),
+            "attempts_here": st.session_state.get(f"visits_{strand}", 0),
+            "walked_away_here": st.session_state.get("fled_from", {}).get(strand, 0),
+        }
+        st.session_state[f"visits_{strand}"] = facts["attempts_here"] + 1
+        if any([facts["mastered_tricks"], facts["defeated_monsters"], facts["last_score"],
+                facts["walked_away_here"]]):
+            with st.spinner("It recognizes you..."):
+                st.session_state[mem_key] = rewards.battle_memory_line(
+                    st.session_state.get("player_name", "Challenger"),
+                    mon["monster"], facts)
         else:
-            try:
-                explanation_verdict, tutor_response = judge_explanation(
-                    question_prompt=q["prompt"],
-                    expected_concept=q["answer"],
-                    student_explanation=explanation,
-                    known_snares=q.get("known_snares", []),
-                )
-            except Exception as error:
-                # Covers things like: no internet, invalid/missing API
-                # key, rate limits, or any other unexpected API problem.
-                # We never let this crash the app -- we tell the student
-                # plainly what happened and fall back to the mock
-                # dropdown's value (and the mock dialogue line) for
-                # this one submission only.
-                new_messages.append({
-                    "id": str(uuid.uuid4()),
-                    "kind": "error",
-                    "text": (
-                        f"⚠️ Couldn't reach the real AI tutor ({error}). "
-                        "Falling back to the mock verdict for this submission."
-                    ),
-                })
-                explanation_verdict = fake_verdict
-                tutor_response = mock_in_character_response()
+            st.session_state[mem_key] = ""
+    mon_l = dict(mon)
+    if st.session_state.get(mem_key):
+        mon_l["lines"] = [st.session_state[mem_key]] + list(mon.get("lines", []))
+    components.html(_encounter_html(mon_l, st.session_state.get("player_name", "Challenger")),
+                    height=520, scrolling=False)
+    mid = st.columns([2, 2, 2])
+    if mid[1].button(f"FACE {mon['monster'].upper()}", type="primary",
+                     use_container_width=True, key="enc_go"):
+        clear_battle_artifacts()
+        st.session_state.quiz = pick_quiz(strand, 5)
+        st.session_state.answers = {}
+        st.session_state.stage = "quiz"
+        st.rerun()
+    mid[1].button("Retreat to the nexus", key="enc_flee", on_click=back_to_map,
+                  use_container_width=True)
 
-        if is_vacuum_box:
-            # The real numeric calculation always has the final say: if
-            # the force value is wrong, the verdict is "wrong" no matter
-            # how good the written explanation was. If the force value
-            # is right, the explanation-quality verdict (real AI, or the
-            # mock fallback) decides resolved/thin/wrong.
-            verdict = explanation_verdict if force_is_correct else "wrong"
-        else:
-            verdict = explanation_verdict
 
-        # -------------------------------------------------------------
-        # PHASE 5: this used to be a plain "AI verdict on your
-        # explanation: X" line. We now fold the verdict word AND the
-        # in-character tutor dialogue into ONE combined message instead
-        # of showing them as two separate messages. Reasoning: the
-        # dialogue line only makes sense paired with the verdict that
-        # produced it ("resolved" -> affirming line, "thin"/"wrong" ->
-        # guiding question), so keeping them together as one message
-        # reads as a single coherent moment from the tutor rather than
-        # cluttering the screen with two messages every submission. The
-        # bold verdict word is kept at the front so it's still instantly
-        # scannable, exactly like before.
-        # -------------------------------------------------------------
-        verdict_kind = {"resolved": "success", "thin": "warning", "wrong": "error"}[verdict]
-        new_messages.append({
-            "id": str(uuid.uuid4()),
-            "kind": verdict_kind,
-            "text": f"**{verdict.upper()}** — {tutor_response}",
-        })
+def back_to_map():
+    # A retreat costs nothing - a student who needs a break must be able to
+    # take one. But the citadel notices, and the monster brings it up.
+    fled = st.session_state.get("enc_strand") or st.session_state.get("last_strand")
+    if fled and st.session_state.get("stage") in ("encounter", "quiz", "results", "mastery"):
+        st.session_state.setdefault("fled_from", {})
+        st.session_state.fled_from[fled] = st.session_state.fled_from.get(fled, 0) + 1
+    for k in ("quiz", "answers", "guides", "mastered", "teacher_report", "escal_report",
+              "msession", "mcheck", "mlesson", "mlesson_why", "mfeedback", "mtranscript"):
+        st.session_state.pop(k, None)
+    st.session_state.stage = "map"
 
-        # -------------------------------------------------------------
-        # PHASE 2 (this session): the mastery loop. On a "thin"/"wrong"
-        # verdict, teach the current strategy rung's lesson (advancing
-        # the rung after repeated misses, and deterministically
-        # revealing the answer once the ladder is exhausted -- never an
-        # open loop). On "resolved", this just resets the ladder for
-        # next time. Does NOT touch the streak-based clear condition
-        # above, which remains the only thing that decides "cleared".
-        # -------------------------------------------------------------
-        mastery_result = record_attempt_and_get_lesson(
-            progress=st.session_state.progress,
-            anomaly_id=selected_id,
-            question_prompt=q["prompt"],
-            expected_concept=q["answer"],
-            verdict=verdict,
-            snare_id=st.session_state.get("last_snare_id", "none"),
-            known_snares=q.get("known_snares", []),
-        )
-        if mastery_result is not None:
-            new_messages.append({
-                "id": str(uuid.uuid4()),
-                "kind": "info",
-                "text": f"🧭 **{mastery_result['strategy_label']}** — {mastery_result['text']}",
-            })
 
-        st.session_state.feedback_messages = new_messages
-        st.session_state.last_verdict = verdict
+def trophy_shelf():
+    """Relics are the only permanent reward, and they are only earned by real
+    mastery. A collection you cannot look at is not a collection."""
+    relics = st.session_state.get("relics", [])
+    bests = st.session_state.get("bests", {})
+    if not relics and not bests:
+        return
+    with st.expander(f"Your relics ({len(relics)})", expanded=False):
+        for r in relics:
+            st.markdown(f"**{esc(r.get('name', 'A relic'))}** — {esc(r.get('power', ''))}"
+                        + (f"  \n<span style='color:#a99;font-size:.8rem'>taken from "
+                           f"{esc(r.get('monster', ''))}</span>" if r.get("monster") else ""),
+                        unsafe_allow_html=True)
+        if bests:
+            st.caption("Speed records: " + " · ".join(
+                f"{_LIEUTENANTS[k]['monster']} {v}" for k, v in bests.items()
+                if k in _LIEUTENANTS))
 
-        st.session_state.streak = update_streak(st.session_state.streak, verdict)
-        st.session_state.question_index = (st.session_state.question_index + 1) % len(questions)
 
-        if is_anomaly_cleared(st.session_state.streak):
-            st.session_state.cleared = True
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(s).lower()).strip("_")
 
-        # Save this Anomaly's new streak/question/cleared status to
-        # data/progress.json so it survives a reload.
-        update_anomaly_progress(
-            st.session_state.progress,
-            selected_id,
-            st.session_state.question_index,
-            st.session_state.streak,
-            st.session_state.cleared,
-        )
-        save_progress(st.session_state.progress)
 
-        # MILESTONE 7 FIX: this is the actual "just cleared" -> Debrief
-        # routing (previously misplaced under the Restart button, where
-        # it referenced an undefined variable and could never run --
-        # meaning the Debrief scene never appeared after a real clear).
-        # was_cleared_before/unlocked_before were captured above, before
-        # this submission changed anything, so the comparison is valid.
-        if st.session_state.cleared and not was_cleared_before:
-            unlocked_after = {
-                cid: is_chapter_unlocked(cid, chapters, st.session_state.progress) for cid in chapters
-            }
-            newly_unlocked = [
-                chapters[cid]["name"] for cid in chapters
-                if not unlocked_before[cid] and unlocked_after[cid]
-            ]
-            st.session_state.debrief_anomaly_id = selected_id
-            st.session_state.debrief_newly_unlocked = newly_unlocked
-            chapter_id = st.session_state.current_chapter
-            debrief_accent = (
-                getattr(tokens, chapters[chapter_id]["accent_token"])
-                if chapter_id in chapters else tokens.MENTOR_ACCENT
+def hub_relays():
+    """Hidden Streamlit buttons the citadel scene clicks on the player's behalf.
+
+    The scene lives in a sandboxed frame with no allow-top-navigation, so a link
+    inside it cannot change the page - which is why entering a battle used to
+    open a second tab, leaving the citadel's music playing behind it. The frame
+    IS allowed to reach the parent document, so it clicks one of these instead.
+    Nothing navigates, the session survives, and the whole game stays in one tab.
+    """
+    st.markdown(
+        '<style>[class*="st-key-relay_"]{position:absolute;width:1px;height:1px;'
+        'overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}</style>',
+        unsafe_allow_html=True)
+    for _s in MONSTERS:
+        with st.container(key=f"relay_station_{_slug(_s)}"):
+            st.button(f"Enter {_s}", key=f"relay_go_{_slug(_s)}",
+                      on_click=lambda s=_s: st.session_state.update(
+                          stage="encounter", enc_strand=s,
+                          **{"faced_strands": st.session_state.get("faced_strands", set()) | {s}}))
+    with st.container(key="relay_dashboard"):
+        st.button("Simple dashboard", key="relay_go_dash", on_click=to_dashboard)
+    with st.container(key="relay_parents"):
+        st.button("For mum and dad", key="relay_go_parents", on_click=to_parents)
+
+
+def _enter_strand(s):
+    """Enter a monster's battle - the same routing the hidden relays fire, so a
+    thumb tapping the phone list lands exactly where a click on the 3D monster
+    would."""
+    st.session_state.update(
+        stage="encounter", enc_strand=s,
+        faced_strands=st.session_state.get("faced_strands", set()) | {s})
+
+
+def phone_monster_list():
+    """A phone cannot comfortably orbit the citadel to tap a small monster, so
+    below the scene it gets a full-width, vertical list of the five - name and
+    the strand each guards - as real buttons. Tapping one enters that battle.
+    Desktop never sees this: it is guarded behind device == 'phone'."""
+    st.markdown(
+        '<style>'
+        # give the list back the page padding the full-bleed map stripped, and
+        # clear the fixed letters-home button in the corner
+        '[class*="st-key-phone_pick_wrap"]{padding:0 14px 78px}'
+        '[class*="st-key-phone_pick_"] button{width:100%;text-align:left;'
+        'justify-content:flex-start;min-height:62px;border-radius:12px;'
+        'border:1px solid rgba(255,236,214,.14);border-left-width:5px;'
+        'background:linear-gradient(160deg,#1c1119,#160e18);color:#f2e8dc;'
+        'text-transform:none;letter-spacing:0;font-weight:700;padding:12px 16px;'
+        'line-height:1.3}'
+        '[class*="st-key-phone_pick_"] button:hover{border-color:#e08d6d;'
+        'box-shadow:0 0 16px rgba(224,141,109,.22)}'
+        '[class*="st-key-phone_pick_"] button p{font-size:1.05rem;font-weight:800}'
+        + "".join(
+            f'.st-key-phone_pick_{_slug(s)} button{{border-left-color:{m["color"]}}}'
+            for s, m in MONSTERS.items())
+        + '</style>', unsafe_allow_html=True)
+    with st.container(key="phone_pick_wrap"):
+        st.markdown('<div class="gwb-kicker" style="margin:.2rem 0 .5rem">'
+                    'Choose your monster</div>', unsafe_allow_html=True)
+        for s, m in MONSTERS.items():
+            st.button(f"{m['monster']}  \n{s}", key=f"phone_pick_{_slug(s)}",
+                      on_click=_enter_strand, args=(s,),
+                      use_container_width=True)
+        d_col, p_col = st.columns(2)
+        d_col.button("Simple dashboard", key="phone_pick_dash",
+                     on_click=to_dashboard, use_container_width=True)
+        p_col.button("For mum and dad", key="phone_pick_parents",
+                     on_click=to_parents, use_container_width=True)
+
+
+def map_stage():
+    # full-bleed: strip Streamlit chrome so the game IS the screen (this stage only)
+    _phone = st.session_state.get("device") == "phone"
+    # A phone keeps a strip below the scene for the tap-to-pick list, so the
+    # scene must not run to the very bottom edge as it does on a desktop.
+    full_bleed("0", phone_bottom="0" if not _phone else "12px")
+    hub_relays()
+    components.html(_hub_html(), height=340 if _phone else 800, scrolling=False)
+    if _phone:
+        phone_monster_list()
+    trophy_shelf()
+
+
+# ---------------- QUIZ ----------------
+def quiz():
+    if st.session_state.get("adventure"):
+        strand0 = st.session_state.quiz[0]["strand"] if st.session_state.get("quiz") else None
+        mon = MONSTERS.get(strand0)
+        st.markdown('<div class="gwb-kicker">PROMETHEUS LAB</div>', unsafe_allow_html=True)
+        st.title(f"Face {mon['monster']}" if mon else "The Challenge")
+        if mon:
+            # markdown turns indented HTML into a code block - keep this flush-left
+            taunt_html = (
+                '<style>'
+                '[data-testid="stElementContainer"]:has(iframe) {'
+                'position:fixed; bottom:14px; right:14px; width:180px !important;'
+                'z-index:998; margin:0;'
+                f'filter:drop-shadow(0 0 14px {mon["color"]}66);'
+                'animation:gwbBob 3.2s ease-in-out infinite}'
+                # On a phone this heckler shares the screen with the questions.
+                # Pinned to the viewport corner it sat on top of whatever option
+                # scrolled under it. So on a phone the whole thing - bubble and
+                # monster - drops into the normal flow under the title: the
+                # monster tucks to the right, the questions begin below it, and
+                # nothing ever floats over the answers.
+                '@media (max-width:700px){'
+                '[data-testid="stElementContainer"]:has(iframe){'
+                'position:static !important; width:96px !important;'
+                'right:auto; bottom:auto; margin:0 0 .3rem auto}'
+                '[data-testid="stElementContainer"] iframe{height:120px !important}'
+                '.gwb-taunt{position:static !important;margin:0 0 .2rem;'
+                'animation:none;max-width:100%}'
+                '.gwb-bubble{max-width:100%;font-size:.86rem;'
+                'border-radius:12px 12px 12px 2px}}'
+                '</style>'
+                '<div class="gwb-taunt" style="bottom:190px;right:18px">'
+                f'<div class="gwb-bubble"><strong>{mon["monster"]}:</strong> '
+                f'{mon.get("taunt", "")}</div></div>'
             )
-            _begin_transition(view="debrief", accent_hex=debrief_accent)
+            st.markdown(taunt_html, unsafe_allow_html=True)
+            components.html(_taunt_html(mon["model"],
+                                        mon.get("clip_ambient", ""),
+                                        mon.get("sp_ambient", 0.8) * 0.85), height=170)
+        st.caption("Answer every question, then submit. Wrong answers feed the monster.")
+        st.button("Back to the nexus", key="quiz_to_nexus", on_click=back_to_map)
+    else:
+        st.title("Quiz")
+        st.caption("Answer every question, then submit.")
+    for i, q in enumerate(st.session_state.quiz, 1):
+        # the topic is shown so a battle across a whole strand reads as coverage
+        # rather than as a jumble: a student can see that solving an equation
+        # and finding a slope are both Algebra without having to wonder
+        if q.get("topic"):
+            st.markdown(
+                f'<div style="color:#9b8ba0;font-size:.68rem;letter-spacing:.12em;'
+                f'text-transform:uppercase;margin:.2rem 0 -.4rem">{_hescape(q["topic"])}</div>',
+                unsafe_allow_html=True)
+        st.markdown(f"**{i}. {esc(q['question'])}**")
+        labels = [o["label"] for o in q["options"]]
+        choice = st.radio(
+            f"q_{q['id']}",
+            labels,
+            format_func=lambda l, q=q: f"{l})  " + esc(next(o['text'] for o in q['options'] if o['label'] == l)),
+            index=None,
+            key=f"radio_{q['id']}",
+            label_visibility="collapsed",
+        )
+        st.session_state.answers[q["id"]] = choice
+        st.divider()
 
+    answered = sum(1 for q in st.session_state.quiz if st.session_state.answers.get(q["id"]))
+    st.progress(answered / len(st.session_state.quiz), text=f"{answered} of {len(st.session_state.quiz)} answered")
+    if st.button("Submit", type="primary", disabled=answered < len(st.session_state.quiz)):
+        st.session_state.stage = "results"
         st.rerun()
 
-    st.metric("Current Streak", st.session_state.streak)
+
+# ---------------- RESULTS ----------------
+def results():
+    if "quiz" not in st.session_state:
+        back_to_map()
+        st.rerun()
+    result = agent.grade_quiz(st.session_state.quiz, st.session_state.answers)
+    analysis = agent.analyze(result)
+    # the player submits from the foot of a five-question page; the report is
+    # at the top, so put them there
+    scroll_to_top(f"results-{result['correct']}-{result['total']}-"
+                  f"{len(st.session_state.get('answers', {}))}")
+
+    if st.session_state.get("adventure"):
+        st.markdown('<div class="gwb-kicker">PROMETHEUS LAB</div>', unsafe_allow_html=True)
+        st.title("The Battle Report")
+    else:
+        st.title("Results")
+    st.session_state.last_score = f"{result['correct']} of {result['total']}"
+    st.metric("Score", f"{result['correct']} / {result['total']}  ·  {result['score_pct']}%")
+
+    if not result["wrong"]:
+        st.write("A perfect score — nothing got past you this time.")
+        st.button("Take another quiz", key="again_perfect", on_click=reset)
+        return
+
+    # --- the agent's decision: what matters most ---
+    priority = analysis["priority"]
+    mastered = st.session_state.get("mastered", set())
+    adventure = st.session_state.get("adventure")
+    if adventure and priority and priority["id"] not in mastered and result["wrong"]:
+        strand = result["wrong"][0]["item"]["strand"]
+        mon = monster_for(strand)
+        if mon:
+            bcols = st.columns([1, 3])
+            with bcols[0]:
+                components.html(_taunt_html(mon["model"],
+                                            clip_pref=mon.get("clip_fight", ""),
+                                            speed=mon.get("sp_fight", 0.7)), height=175)
+            with bcols[1]:
+                st.markdown(
+                    f'<div style="border-left:3px solid {mon["color"]};padding:6px 0 6px 16px;'
+                    f'margin-top:14px">'
+                    f'<div style="font-size:.72rem;letter-spacing:.16em;color:{mon["color"]};'
+                    f'font-weight:700">A MONSTER GOT YOU</div>'
+                    f'<div style="font-size:1.55rem;color:#ffefdd;font-weight:900;'
+                    f'text-transform:uppercase">{mon["monster"]} strikes!</div>'
+                    f'<div style="color:#cbb8a4;font-size:.95rem">It feeds on '
+                    f'<strong style="color:#ffefdd">{priority["name"].lower()}</strong> '
+                    f'— learn its weakness below and defeat it.</div></div>',
+                    unsafe_allow_html=True)
+    if priority and priority["id"] in mastered:
+        note(
+            "Mastered",
+            f"You've beaten the snare that caught you most — "
+            f"<strong>{priority['name']}</strong>. Well done.",
+        )
+        st.write("Not feeling fully confident yet? Take another quiz to prove it sticks.")
+        st.button("Take another quiz", type="primary", key="again_top", on_click=reset)
+    elif priority:
+        n = priority["count"]
+        reason = (f"it got you {n} times — more than any other snare"
+                  if len(analysis["patterns"]) > 1 and n > 1
+                  else "it shows up most clearly in your answers")
+        note(
+            "Why the agent starts here",
+            f"How they got you: <strong>{priority['name']}</strong>. The agent hunts "
+            f"that snare first because {reason}. The study guide starts there.",
+        )
+        st.button(
+            ("Defeat the monster — practice to mastery"
+             if st.session_state.get("adventure") else "Practice until I've mastered it"),
+            type="primary",
+            on_click=start_mastery, args=(result, analysis),
+            help="The agent keeps teaching and checking, switching approaches "
+                 "when one doesn't land, until you get two in a row right.",
+        )
+    # A note goes home whenever anything was missed - not only when the run
+    # falls apart. A parent who only ever hears from us on the worst days has
+    # no way to see the pattern, or the progress.
+    if result["wrong"] and not (priority and priority["id"] in mastered):
+        note(
+            "For mum and dad to see",
+            ("Several questions were missed. The agent writes your parents a report they "
+             "can act on — not just a score.") if analysis["escalate"] else
+            ("The agent has written your parents a short note about what tripped you up "
+             "here, and what to try at the kitchen table."),
+        )
+        with st.expander("See the report for mum and dad",
+                         expanded=bool(analysis["escalate"])):
+            if "teacher_report" not in st.session_state:
+                with st.spinner("Writing a note your parents can act on..."):
+                    st.session_state.teacher_report = agent.teacher_report(result, analysis)
+            save_letter(f"After the quiz — {priority['name'] if priority else 'results'}",
+                        st.session_state.teacher_report, "quiz",
+                        trick_id=(priority or {}).get("id", ""),
+                        trick_name=(priority or {}).get("name", ""),
+                        strand=result["wrong"][0]["item"]["strand"] if result["wrong"] else "")
+            with st.container(border=True):
+                st.markdown(st.session_state.teacher_report)
+            st.download_button("Download report", st.session_state.teacher_report,
+                               file_name="parent_report.md", key="dl_teacher")
+            st.button("Open the letters-home page", key="letters_from_results",
+                      on_click=to_parents,
+                      help="Every note the agent writes for your parents, kept in one place")
+
+    # --- a study-guide card per missed question ---
+    st.subheader("Your study guide")
+    if "guides" not in st.session_state:
+        fight_ph = st.empty()
+        if st.session_state.get("adventure") and result["wrong"]:
+            try:
+                fmon = monster_for(result["wrong"][0]["item"]["strand"])
+                if fmon:
+                    with fight_ph.container():
+                        components.html(
+                            _fight_html(fmon, result["correct"], result["total"]),
+                            height=240)
+            except Exception:
+                pass  # the mini-fight must never break the results page
+        with st.spinner("The agent is studying your mistakes and writing your guide..."):
+            seen = {q["id"] for q in st.session_state.quiz}
+            st.session_state.guides = agent.build_study_guides(result, QUESTIONS, seen_ids=seen)
+        fight_ph.empty()
+    for i, guide in enumerate(st.session_state.guides):
+        with st.container(border=True):
+            st.markdown(f"**{esc(guide['question'])}**")
+            st.markdown(f"You picked **{esc(guide['chosen'])}** — the correct answer is **{esc(guide['correct'])}**")
+            if guide["trick"].get("name"):
+                gmon = monster_for(guide["strand"]) if st.session_state.get("adventure") else None
+                if gmon:
+                    st.markdown(
+                        f"<div style='font-size:.85rem;color:#8a8378'>"
+                        f"<span style='color:{gmon['color']};font-size:1rem'>&#9670;</span> "
+                        f"<strong style='color:{gmon['color']}'>{gmon['monster']}</strong>"
+                        f"&nbsp;&middot;&nbsp;{guide['trick']['name']}</div>",
+                        unsafe_allow_html=True)
+                else:
+                    st.caption(f"The snare that got you: {guide['trick']['name']}")
+            st.markdown("**Why:** " + esc(guide["explanation"]))
+            if guide["worked_solution"]:
+                with st.expander("See the worked solution"):
+                    st.markdown(solution_md(guide))
+
+            # --- interactive "Now you try" ---
+            p = guide["practice"]
+            challenge_title = (f"{gmon['monster']}'s next challenge — "
+                               f"let's see you slip this time:" if gmon else "Now you try:")
+            st.markdown(f"**{challenge_title}** " + esc(p["question"]))
+            if not p.get("options"):
+                st.caption("Work it out on paper — then prove it in the training grounds."
+                           if st.session_state.get("adventure")
+                           else "Work it out on paper — then check it in practice mode above.")
+            if p.get("options"):
+                choice = st.radio(
+                    f"practice_{i}",
+                    [o["label"] for o in p["options"]],
+                    format_func=lambda l, p=p: f"{l})  " + esc(next(
+                        o["text"] for o in p["options"] if o["label"] == l)),
+                    index=None, key=f"practice_{i}", label_visibility="collapsed",
+                )
+                # a hint (a nudge, never the answer) is available before attempting
+                if guide.get("hint"):
+                    with st.expander("Stuck? Show a hint"):
+                        st.markdown(esc(guide["hint"]))
+                # feedback + the full worked solution appear ONLY after an attempt,
+                # so the answer isn't handed over before the student tries
+                if choice:
+                    if choice == p["correct"]:
+                        note("Correct", "That's exactly it.")
+                    else:
+                        o = next(o for o in p["options"] if o["label"] == choice)
+                        trap = o.get("trick_name")
+                        note("Not quite",
+                             f"That's the <strong>{trap}</strong> trap again — "
+                             "open a hint and try once more." if trap else
+                             "Take another look, or open a hint.")
+                    if p.get("solution"):
+                        with st.expander("See this one worked out"):
+                            st.markdown(solution_md(p))
+
+    # Gemma directs the hunt: which monster is worth facing next, and why
+    if st.session_state.get("adventure"):
+        cleared = st.session_state.get("defeated_strands", set())
+        open_hunts = [{"key": s, "name": mo["monster"],
+                       "focus": f"{s} - {mo['taunt'].rstrip('.')}"}
+                      for s, mo in MONSTERS.items() if s not in cleared]
+        if "hunt_pick" not in st.session_state and len(open_hunts) > 1:
+            faced = st.session_state.get("faced_strands", set())
+            with st.spinner("The citadel decides where you go next..."):
+                st.session_state.hunt_pick = agent.direct_next(
+                    open_hunts,
+                    [f"just scored {result['correct']} of {result['total']}",
+                     "snares already beaten: " + (", ".join(
+                         st.session_state.get("mastered_names", [])) or "none yet"),
+                     "strands already cleared: " + (", ".join(cleared) or "none yet"),
+                     "never attempted: " + (", ".join(
+                         s for s in MONSTERS if s not in faced) or "none"),
+                     f"the snare that caught them most today: {priority['name']}"
+                     if priority else ""],
+                    "The student has just finished a battle. Pick the ONE monster "
+                    "they should hunt next.")
+        hp = st.session_state.get("hunt_pick") or {}
+        if hp.get("why"):
+            note(f"The citadel sends you to {hp['name']}", esc_note(hp["why"]))
+            st.button(f"Hunt {hp['name']}", key="go_hunt", type="primary",
+                      on_click=lambda k=hp["key"]: st.session_state.update(
+                          stage="encounter", enc_strand=k))
+
+    if st.session_state.get("adventure"):
+        st.button("Back to the nexus", key="tomap_bottom", on_click=back_to_map)
+    st.button("Take another quiz", key="again_bottom", on_click=reset)
+    if load_letters():
+        st.button("For mum and dad", key="letters_bottom", on_click=to_parents,
+                  help="Every note the agent has written for your parents this session")
+
+
+# ---------------- MASTERY LOOP ----------------
+def check_answer():
+    s = st.session_state.msession
+    check = st.session_state.mcheck
+    chosen = st.session_state.get("mastery_choice")
+    if not chosen:
+        return
+    explanation = st.session_state.get(f"mastery_reason_{s.attempts}", "")
+
+    with st.spinner("The agent is reading your answer..."):
+        outcome = m.submit_answer(s, check, chosen, explanation)
+    st.session_state.mfeedback = outcome
+    if outcome["state"] == m.IN_PROGRESS:
+        with st.spinner("The agent is deciding what to try next..."):
+            if outcome["strategy_changed"]:
+                st.session_state.mlesson = m.teach(s)
+                st.session_state.mlesson_why = (
+                    outcome.get("strategy_why")
+                    or f"Trying a different approach: {s.strategy_name}.")
+            st.session_state.mcheck = m.next_check(s, QUESTIONS)
+    st.session_state.pop("mastery_choice", None)
+
+
+
+def mastery_stage():
+    if "msession" not in st.session_state:
+        # nothing to train (e.g. arrived from the boss debug route) - go home
+        back_to_map()
+        st.rerun()
+    s = st.session_state.msession
+    # every answered check question puts a new lesson and verdict at the top
+    scroll_to_top(f"mastery-{s.attempts}-{s.state}")
+    st.markdown('<div class="gwb-kicker">' +
+                ("PROMETHEUS LAB · TRAINING GROUNDS" if st.session_state.get("adventure")
+                 else "Autonomous practice") + '</div>', unsafe_allow_html=True)
+    st.title(("Defeat the snare: " if st.session_state.get("adventure") else "Mastering: ")
+             + s.trick_name)
+
+    # one quiet status line + an escape hatch while practising
+    if s.state == m.IN_PROGRESS:
+        st.caption(f"Attempt {s.attempts + 1} of {m.MAX_ATTEMPTS} · "
+                   f"{s.strategy_name} · streak {s.consecutive_correct} of {m.MASTERY_BAR}")
+        st.button("← Back to results", key="leave_practice",
+                  on_click=lambda: st.session_state.update(stage="results"),
+                  help="Leave practice — you can start it again from your results anytime.")
+
+    # terminal screens
+    if s.state == m.MASTERED:
+        # remember it: the results page now shows this snare as beaten
+        st.session_state.setdefault("mastered", set()).add(s.trick_id)
+        st.session_state.setdefault("mastered_names", []).append(s.trick_name)
+        st.session_state.setdefault("defeated_strands", set()).add(s.strand)
+        relic_key = f"relic_{s.trick_id}"
+        if relic_key not in st.session_state:
+            gmon = monster_for(s.strand) or {}
+            tried = [h["strategy"] for h in s.history if h["kind"] == "lesson"]
+            with st.spinner("The monster drops something..."):
+                st.session_state[relic_key] = rewards.forge_relic(
+                    st.session_state.get("player_name", "Challenger"),
+                    gmon.get("monster", "the monster"), s.trick_name,
+                    s.attempts, tried)
+            st.session_state.setdefault("relics", []).append(
+                {**st.session_state[relic_key], "monster": gmon.get("monster", "")})
+        _relic = st.session_state[relic_key]
+        note("IT DROPS A RELIC",
+             f"<strong>{_relic['name']}</strong> — {_relic['power']}")
+        if len(st.session_state.get("defeated_strands", set())) >= 5:
+            note("THE FIFTH SEAL SHATTERS",
+                 "Across the citadel, the gate is opening. Someone is waiting for you.")
+            st.button("GO TO THE GATE", type="primary", key="to_finale",
+                      on_click=lambda: st.session_state.update(stage="finale"))
+        note("Why the agent declared mastery",
+             "Two fresh questions in a row, answered correctly — and your reasoning showed "
+             "real understanding, not a lucky guess. That's the evidence bar for mastery.")
+        st.code(m.mastery_recap(s))
+        # good news belongs in the letters home too, not just the hard news
+        save_letter(f"Beat the snare: {s.trick_name}",
+                    f"**Good news** — {_hescape(st.session_state.get('player_name', 'your child'))} "
+                    f"worked past **{s.trick_name}** ({s.strand}).\n\n"
+                    + m.mastery_recap(s)
+                    + "\n\nThe agent only calls this mastery after two fresh questions in a "
+                      "row are answered correctly with reasoning that holds up — not a lucky guess.",
+                    "mastery", trick_id=s.trick_id, trick_name=s.trick_name,
+                    strand=s.strand)
+        st.button("Back to my results", key="back_mastered",
+                  on_click=lambda: st.session_state.update(stage="results"))
+        st.button("Take another quiz", key="again_mastered", on_click=reset)
+        return
+    if s.state == m.ESCALATED:
+        if st.session_state.get("adventure"):
+            # the whispered warning comes true
+            note("THE AIR GOES COLD",
+                 "The little monsters have gone silent. Something older has noticed "
+                 f"how many answers you've dropped, "
+                 f"{_hescape(st.session_state.get('player_name', 'Challenger'))}. "
+                 "<strong>The Collector is here.</strong>")
+            st.button("FACE THE COLLECTOR — the speed trial", type="primary",
+                      key="boss_go",
+                      on_click=lambda: st.session_state.update(stage="boss"))
+        note("For mum and dad to see",
+             "The agent tried every approach it has. Time for a human — here is a report "
+             "your parents can act on, informed by what already didn't work.")
+        if "escal_report" not in st.session_state:
+            with st.spinner("Writing a note your parents can act on..."):
+                st.session_state.escal_report = m.escalation_report(s)
+        save_letter(f"Still stuck on {s.trick_name}", st.session_state.escal_report,
+                    "escalation", trick_id=s.trick_id, trick_name=s.trick_name,
+                    strand=s.strand)
+        with st.container(border=True):
+            st.markdown(st.session_state.escal_report)
+        st.download_button("Download report", st.session_state.escal_report,
+                           file_name="parent_report.md", key="dl_escal")
+        st.button("Open the letters-home page", key="letters_from_escal",
+                  on_click=to_parents,
+                  help="Every note the agent writes for your parents, kept in one place")
+        st.button("Back to my results", key="back_escalated",
+                  on_click=lambda: st.session_state.update(stage="results"))
+        st.button("Take another quiz", key="again_escalated", on_click=reset)
+        return
+
+    # feedback from the previous answer
+    fb = st.session_state.get("mfeedback")
+
+    if fb and fb.get("reaction"):
+        # Gemma read the student's own typed words and answers them directly
+        note("The citadel heard you", esc_note(fb["reaction"]))
+    if fb and fb.get("rationale"):
+        # explainable AI: every decision shows its evidence-based "why"
+        headline = ("Correct" if fb["correct"] and fb.get("label") == "RESOLVED"
+                    else "Right answer — but not yet" if fb["correct"]
+                    else "Not yet")
+        note(f"Why the agent decided this · {headline}", esc_note(fb["rationale"]))
+
+    # the lesson for the current strategy, with the reason this approach was chosen
+    with st.container(border=True):
+        st.caption(f"Lesson — {s.strategy_name}")
+        st.markdown(esc(st.session_state.mlesson))
+        if st.session_state.get("mlesson_why"):
+            st.caption("Why this approach: " + esc(st.session_state.mlesson_why))
+
+    # the check question
+    check = st.session_state.mcheck
+    if check is None:
+        s.state = m.ESCALATED
+        s.escalation_reason = "no fresh check question available"
+        st.rerun()
+    st.markdown(f"**Check yourself: {esc(check['question'])}**")
+    st.radio(
+        "mastery check question",
+        [o["label"] for o in check["options"]],
+        format_func=lambda l: f"{l})  " + esc(next(o["text"] for o in check["options"] if o["label"] == l)),
+        index=None,
+        key="mastery_choice",
+        label_visibility="collapsed",
+    )
+    # a per-attempt key: reusing one key kept the previous attempt's sentence in
+    # the box, and the next answer was spliced into the middle of it
+    st.text_input(
+        "In one line: how did you get your answer? (optional — the agent reads it and answers back)",
+        key=f"mastery_reason_{s.attempts}",
+        placeholder="e.g. I found a common denominator of 12, then added the tops",
+    )
+
+    st.button("Check my answer", type="primary", on_click=check_answer,
+              disabled=st.session_state.get("mastery_choice") is None)
+
+
+# ---------------- ROUTER ----------------
+# Stepping through a maze portal navigates here with ?station=<strand>; turn that
+# into the real quiz for that strand (survives the reload — a quiz needs no prior state).
+if st.query_params.get("exit"):
+    st.query_params.clear()
+    to_dashboard()
+_station = st.query_params.get("station")
+if _station in STATIONS:
+    st.session_state.adventure = True
+    hero = (st.query_params.get("hero") or "").strip()
+    if hero:
+        # names are proper nouns: "sarah" reads as a typo mid-sentence
+        st.session_state.player_name = hero[:24][:1].upper() + hero[:24][1:]
+    # the monster confronts you before its trial begins
+    st.session_state.enc_strand = _station
+    st.session_state.setdefault("faced_strands", set()).add(_station)
+    st.session_state.stage = "encounter"
+    st.query_params.clear()
+
+if st.query_params.get("onboarded"):
+    st.query_params.clear()
+    st.session_state.onboarded = True
+    st.session_state.adventure = True
+    st.session_state.stage = "map"
+if st.query_params.get("parents"):
+    # a parent can come straight here with the challenger's name, so the
+    # notes written for them are one bookmark away
+    _hero = (st.query_params.get("hero") or "").strip()
+    if _hero:
+        st.session_state.player_name = _hero[:24][:1].upper() + _hero[:24][1:]
+        st.session_state.pop("letters", None)
+    st.query_params.clear()
+    to_parents()
+if st.query_params.get("finale"):
+    st.session_state.adventure = True
+    st.session_state.stage = "finale"
+    st.query_params.clear()
+if st.query_params.get("boss"):
+    st.session_state.adventure = True
+    st.session_state.stage = "boss"
+    st.query_params.clear()
+_skl = st.query_params.get("skirmish")
+if _skl in ("doubles", "nines", "split"):
+    st.session_state.adventure = True
+    hero = (st.query_params.get("hero") or "").strip()
+    if hero:
+        # names are proper nouns: "sarah" reads as a typo mid-sentence
+        st.session_state.player_name = hero[:24][:1].upper() + hero[:24][1:]
+    st.session_state.skirmish_lane = _skl
+    st.session_state.stage = "skirmish"
+    st.query_params.clear()
+_cl = st.query_params.get("coach")
+if _cl in ("doubles", "nines", "split"):
+    st.session_state.adventure = True
+    st.session_state.coach_data = {
+        "lane": _cl,
+        "misses": (st.query_params.get("misses") or "").split(",")[:8],
+        "score": st.query_params.get("score") or "0",
+        "streak": st.query_params.get("streak") or "0",
+    }
+    hero = (st.query_params.get("hero") or "").strip()
+    if hero:
+        # names are proper nouns: "sarah" reads as a typo mid-sentence
+        st.session_state.player_name = hero[:24][:1].upper() + hero[:24][1:]
+    st.session_state.stage = "coach"
+    st.query_params.clear()
+
+stage = st.session_state.get("stage", "intro")
+{"intro": intro, "map": map_stage, "encounter": encounter_stage, "quiz": quiz,
+ "results": results, "mastery": mastery_stage, "boss": boss_stage,
+ "skirmish": skirmish_stage, "coach": coach_stage, "finale": finale_stage,
+ "parents": parents_stage, "onboard": onboard_stage}[stage]()
+
+# One way back to the letters home from anywhere in the citadel. A real button,
+# not a link: a link would reload the page and take the session - and the
+# letters with it - down with it.
+if stage not in ("parents", "onboard"):
+    _n = len(load_letters())
+    # two keys, so "notes are waiting" is a CSS state and needs no scripting
+    with st.container(key="letters_float_notes" if _n else "letters_float"):
+        st.button("For mum and dad", key="letters_fab", on_click=to_parents,
+                  help=(f"For mum and dad - {_n} note{'s' if _n != 1 else ''} waiting"
+                        if _n else "For mum and dad - nothing written yet"))

@@ -1,6 +1,15 @@
-.venv/
-.venv-1/
-.env
+# Python
 __pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Secrets / local config
+.env
+*.key
+
+# OS / editor
 .DS_Store
-.DS_Store
+.vscode/
+.idea/

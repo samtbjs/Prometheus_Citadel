@@ -1,0 +1,2184 @@
+[
+  {
+    "id": "NUM-ITEM-01",
+    "strand": "Number",
+    "topic": "powers and exponent laws",
+    "difficulty": "Easy",
+    "question": "Simplify 2 to the power 3 × 2 to the power 4.",
+    "options": [
+      {
+        "label": "A",
+        "text": "2 to the power 7, which is 128",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "2 to the power 12, which is 4096",
+        "is_correct": false,
+        "trick_id": "NUM-1",
+        "trick_name": "Multiplying exponents when multiplying like bases"
+      },
+      {
+        "label": "C",
+        "text": "4 to the power 7, which is 16384",
+        "is_correct": false,
+        "trick_id": "NUM-2",
+        "trick_name": "Changing the base when operating on powers"
+      },
+      {
+        "label": "D",
+        "text": "4 to the power 12, which is 16,777,216",
+        "is_correct": false,
+        "trick_id": "NUM-2",
+        "trick_name": "Changing the base when operating on powers"
+      }
+    ],
+    "correct": "A",
+    "solution": "Same base, so keep the base and add the exponents: 2³ × 2⁴ = 2³⁺⁴ = 2⁷ = 128.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-02",
+    "strand": "Number",
+    "topic": "powers and exponent laws",
+    "difficulty": "Easy",
+    "question": "Evaluate 2 to the power 3, all raised to the power 2.",
+    "options": [
+      {
+        "label": "A",
+        "text": "4 to the power 5, which is 1024",
+        "is_correct": false,
+        "trick_id": "NUM-2",
+        "trick_name": "Changing the base when operating on powers"
+      },
+      {
+        "label": "B",
+        "text": "2 to the power 5, which is 32",
+        "is_correct": false,
+        "trick_id": "NUM-3",
+        "trick_name": "Adding exponents for a power of a power"
+      },
+      {
+        "label": "C",
+        "text": "4 to the power 6, which is 4096",
+        "is_correct": false,
+        "trick_id": "NUM-2",
+        "trick_name": "Changing the base when operating on powers"
+      },
+      {
+        "label": "D",
+        "text": "2 to the power 6, which is 64",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Power of a power: multiply the exponents and keep the base. (2³)² = 2⁶ because 3 × 2 = 6, and 2⁶ = 64 (check: 8² = 64).",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-03",
+    "strand": "Number",
+    "topic": "powers and exponent laws",
+    "difficulty": "Medium",
+    "question": "Evaluate 3 to the power 0 + 2 to the power negative 2.",
+    "options": [
+      {
+        "label": "A",
+        "text": "5/4 (one and one quarter)",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "negative 3",
+        "is_correct": false,
+        "trick_id": "NUM-5",
+        "trick_name": "Negative exponent makes the value negative"
+      },
+      {
+        "label": "C",
+        "text": "negative 4",
+        "is_correct": false,
+        "trick_id": "NUM-4",
+        "trick_name": "Zero exponent equals zero (combined with the negative-exponent error)"
+      },
+      {
+        "label": "D",
+        "text": "1/4",
+        "is_correct": false,
+        "trick_id": "NUM-4",
+        "trick_name": "Zero exponent equals zero"
+      }
+    ],
+    "correct": "A",
+    "solution": "3⁰ = 1 (any nonzero base to the power 0 is 1). 2⁻² = 1/(2²) = 1/4. Sum: 1 + 1/4 = 5/4.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-04",
+    "strand": "Number",
+    "topic": "operations with rational numbers",
+    "difficulty": "Medium",
+    "question": "Calculate 2/3 + 1/4.",
+    "options": [
+      {
+        "label": "A",
+        "text": "11/12",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "11/7",
+        "is_correct": false,
+        "trick_id": "NUM-6",
+        "trick_name": "Adding fractions straight across"
+      },
+      {
+        "label": "C",
+        "text": "3/7",
+        "is_correct": false,
+        "trick_id": "NUM-6",
+        "trick_name": "Adding fractions straight across"
+      },
+      {
+        "label": "D",
+        "text": "1/4 (that is, 3/12)",
+        "is_correct": false,
+        "trick_id": "NUM-6b",
+        "trick_name": "Common denominator found but numerators not rescaled"
+      }
+    ],
+    "correct": "A",
+    "solution": "Find a common denominator (LCD = 12): 2/3 = 8/12 and 1/4 = 3/12. Then 8/12 + 3/12 = 11/12.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-05",
+    "strand": "Number",
+    "topic": "operations with rational numbers",
+    "difficulty": "Easy",
+    "question": "Evaluate (-3) - (-5).",
+    "options": [
+      {
+        "label": "A",
+        "text": "2",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "negative 2",
+        "is_correct": false,
+        "trick_id": "NUM-7",
+        "trick_name": "Mishandling subtraction of a negative integer"
+      },
+      {
+        "label": "C",
+        "text": "8",
+        "is_correct": false,
+        "trick_id": "NUM-7",
+        "trick_name": "Mishandling subtraction of a negative integer"
+      },
+      {
+        "label": "D",
+        "text": "negative 8",
+        "is_correct": false,
+        "trick_id": "NUM-7",
+        "trick_name": "Mishandling subtraction of a negative integer"
+      }
+    ],
+    "correct": "A",
+    "solution": "Subtracting a negative is the same as adding: -3 - (-5) = -3 + 5 = 2.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-06",
+    "strand": "Number",
+    "topic": "percents and rates",
+    "difficulty": "Medium",
+    "question": "What is 0.5 percent of 200?",
+    "options": [
+      {
+        "label": "A",
+        "text": "1",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "10",
+        "is_correct": false,
+        "trick_id": "NUM-8b",
+        "trick_name": "Percent-to-decimal place-value error (divides by 10 instead of 100)"
+      },
+      {
+        "label": "C",
+        "text": "40,000",
+        "is_correct": false,
+        "trick_id": "NUM-9",
+        "trick_name": "Reversing part and whole in percent/proportion"
+      },
+      {
+        "label": "D",
+        "text": "100",
+        "is_correct": false,
+        "trick_id": "NUM-8",
+        "trick_name": "Taking a percent at face value"
+      }
+    ],
+    "correct": "A",
+    "solution": "Convert the percent to a decimal: 0.5% = 0.5/100 = 0.005. Then 0.005 × 200 = 1.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-07",
+    "strand": "Number",
+    "topic": "percents and rates",
+    "difficulty": "Medium",
+    "question": "15 is what percent of 60?",
+    "options": [
+      {
+        "label": "A",
+        "text": "25 percent",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "400 percent",
+        "is_correct": false,
+        "trick_id": "NUM-9",
+        "trick_name": "Reversing part and whole in percent/proportion"
+      },
+      {
+        "label": "C",
+        "text": "15 percent",
+        "is_correct": false,
+        "trick_id": "NUM-8",
+        "trick_name": "Taking a percent at face value"
+      },
+      {
+        "label": "D",
+        "text": "0.25 percent",
+        "is_correct": false,
+        "trick_id": "NUM-8",
+        "trick_name": "Taking a percent at face value"
+      }
+    ],
+    "correct": "A",
+    "solution": "Percent = part/whole × 100 = 15/60 × 100 = 0.25 × 100 = 25%.",
+    "traps": []
+  },
+  {
+    "id": "NUM-ITEM-08",
+    "strand": "Number",
+    "topic": "percents and rates",
+    "difficulty": "Medium",
+    "question": "3 apples cost $1.20. At the same rate, how much do 7 apples cost?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$8.40",
+        "is_correct": false,
+        "trick_id": "NUM-11",
+        "trick_name": "Treats a group price as a unit price (ignores group size)"
+      },
+      {
+        "label": "B",
+        "text": "$17.50",
+        "is_correct": false,
+        "trick_id": "NUM-9",
+        "trick_name": "Reversing part and whole in percent/proportion"
+      },
+      {
+        "label": "C",
+        "text": "$2.80",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "$5.20",
+        "is_correct": false,
+        "trick_id": "NUM-10",
+        "trick_name": "Additive instead of multiplicative proportional reasoning"
+      }
+    ],
+    "correct": "C",
+    "solution": "Unit rate = 1.20/3 = $0.40 per apple. For 7 apples: 7 × 0.40 = $2.80 (equivalently 1.20 × 7/3).",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-1",
+    "strand": "Algebra",
+    "topic": "algebraic expressions",
+    "difficulty": "Easy",
+    "question": "Simplify the expression: 3(2x - 4) - 5x.",
+    "options": [
+      {
+        "label": "A",
+        "text": "11x - 12",
+        "is_correct": false,
+        "trick_id": "ALG-2",
+        "trick_name": "Negative-Sign Handling Error"
+      },
+      {
+        "label": "B",
+        "text": "x - 4",
+        "is_correct": false,
+        "trick_id": "ALG-1",
+        "trick_name": "Incomplete Distribution"
+      },
+      {
+        "label": "C",
+        "text": "-11x",
+        "is_correct": false,
+        "trick_id": "ALG-3",
+        "trick_name": "Combining Unlike Terms"
+      },
+      {
+        "label": "D",
+        "text": "x - 12",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Distribute: 3(2x-4)=6x-12. Then 6x-12-5x. Combine like terms: 6x-5x=x, giving x-12.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-2",
+    "strand": "Algebra",
+    "topic": "algebraic expressions",
+    "difficulty": "Easy",
+    "question": "Expand and simplify: -2(3x - 5).",
+    "options": [
+      {
+        "label": "A",
+        "text": "-6x - 10",
+        "is_correct": false,
+        "trick_id": "ALG-2",
+        "trick_name": "Negative-Sign Handling Error"
+      },
+      {
+        "label": "B",
+        "text": "-6x - 5",
+        "is_correct": false,
+        "trick_id": "ALG-1",
+        "trick_name": "Incomplete Distribution"
+      },
+      {
+        "label": "C",
+        "text": "4x",
+        "is_correct": false,
+        "trick_id": "ALG-3",
+        "trick_name": "Combining Unlike Terms"
+      },
+      {
+        "label": "D",
+        "text": "-6x + 10",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Distribute the -2 to both terms: -2 × 3x = -6x and -2 × (-5) = +10. Result: -6x + 10.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-3",
+    "strand": "Algebra",
+    "topic": "solving equations",
+    "difficulty": "Medium",
+    "question": "Solve for x: 5x - 3 = 2x + 9.",
+    "options": [
+      {
+        "label": "A",
+        "text": "x = 12",
+        "is_correct": false,
+        "trick_id": "ALG-9",
+        "trick_name": "Partial Division"
+      },
+      {
+        "label": "B",
+        "text": "x = -4",
+        "is_correct": false,
+        "trick_id": "ALG-4",
+        "trick_name": "Balancing / Inverse Operation Error"
+      },
+      {
+        "label": "C",
+        "text": "x = 2",
+        "is_correct": false,
+        "trick_id": "ALG-4",
+        "trick_name": "Balancing / Inverse Operation Error"
+      },
+      {
+        "label": "D",
+        "text": "x = 4",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Subtract 2x from both sides: 3x-3=9. Add 3 to both sides: 3x=12. Divide by 3: x=4.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-4",
+    "strand": "Algebra",
+    "topic": "slope and intercept",
+    "difficulty": "Medium",
+    "question": "A line passes through the points (2, 3) and (6, 11). What is its slope?",
+    "options": [
+      {
+        "label": "A",
+        "text": "2",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "-2",
+        "is_correct": false,
+        "trick_id": "ALG-5",
+        "trick_name": "Inverted or Misordered Slope"
+      },
+      {
+        "label": "C",
+        "text": "3",
+        "is_correct": false,
+        "trick_id": "ALG-7",
+        "trick_name": "Point/Intercept Value Mix-Up"
+      },
+      {
+        "label": "D",
+        "text": "1/2",
+        "is_correct": false,
+        "trick_id": "ALG-5",
+        "trick_name": "Inverted or Misordered Slope"
+      }
+    ],
+    "correct": "A",
+    "solution": "Slope = Δy/Δx = (11 - 3)/(6 - 2) = 8/4 = 2.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-5",
+    "strand": "Algebra",
+    "topic": "slope and intercept",
+    "difficulty": "Easy",
+    "question": "The equation of a line is y = -4x + 7. Which statement is true?",
+    "options": [
+      {
+        "label": "A",
+        "text": "The slope is 7 and the y-intercept is -4.",
+        "is_correct": false,
+        "trick_id": "ALG-6",
+        "trick_name": "Slope-Intercept Swap"
+      },
+      {
+        "label": "B",
+        "text": "The slope is -4 and the y-intercept is 7.",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "The slope is -4x and the y-intercept is 7.",
+        "is_correct": false,
+        "trick_id": "ALG-10",
+        "trick_name": "Slope identified as a term (includes the variable x)"
+      },
+      {
+        "label": "D",
+        "text": "The slope is 4 and the y-intercept is 7.",
+        "is_correct": false,
+        "trick_id": "ALG-2",
+        "trick_name": "Negative-Sign Handling Error"
+      }
+    ],
+    "correct": "B",
+    "solution": "In y=mx+b, the coefficient of x is the slope m=-4 (a number, keeping its sign) and the constant b=7 is the y-intercept.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-6",
+    "strand": "Algebra",
+    "topic": "slope and intercept",
+    "difficulty": "Medium",
+    "question": "A line has slope 3 and passes through the point (2, 5). What is its y-intercept?",
+    "options": [
+      {
+        "label": "A",
+        "text": "11",
+        "is_correct": false,
+        "trick_id": "ALG-4",
+        "trick_name": "Balancing / Inverse Operation Error"
+      },
+      {
+        "label": "B",
+        "text": "5",
+        "is_correct": false,
+        "trick_id": "ALG-7",
+        "trick_name": "Point/Intercept Value Mix-Up"
+      },
+      {
+        "label": "C",
+        "text": "-1",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "1",
+        "is_correct": false,
+        "trick_id": "ALG-4",
+        "trick_name": "Balancing / Inverse Operation Error"
+      }
+    ],
+    "correct": "C",
+    "solution": "Use y=mx+b with m=3 and the point (2,5): $5=3(2)+b=6+b. Subtract $6: b=5-6=-1.",
+    "traps": []
+  },
+  {
+    "id": "ALG-ITEM-8",
+    "strand": "Algebra",
+    "topic": "patterns and modelling",
+    "difficulty": "Hard",
+    "question": "In a growing pattern, Figure 1 uses 4 tiles, Figure 2 uses 7 tiles, and Figure 3 uses 10 tiles. Which rule gives the number of tiles in Figure n?",
+    "options": [
+      {
+        "label": "A",
+        "text": "3n + 4",
+        "is_correct": false,
+        "trick_id": "ALG-8",
+        "trick_name": "Pattern Rule Off-by-One"
+      },
+      {
+        "label": "B",
+        "text": "3n + 1",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "3n",
+        "is_correct": false,
+        "trick_id": "ALG-8",
+        "trick_name": "Pattern Rule Off-by-One"
+      },
+      {
+        "label": "D",
+        "text": "4n",
+        "is_correct": false,
+        "trick_id": "ALG-11",
+        "trick_name": "Assumes a proportional pattern (uses the first term as multiplier)"
+      }
+    ],
+    "correct": "B",
+    "solution": "The tiles increase by 3 each figure, so the coefficient of n is 3. Find the constant using Figure 1: 3(1)+c=4, so c=1. The rule is 3n+1 (check Figure 3: 3(3)+1=10).",
+    "traps": []
+  },
+  {
+    "id": "DAT-Q1",
+    "strand": "Data",
+    "topic": "collecting and sampling",
+    "difficulty": "Easy",
+    "question": "A school has 1000 students. Priya wants to find out how students feel about the new cafeteria menu. Which survey plan will give the MOST representative results?",
+    "options": [
+      {
+        "label": "A",
+        "text": "Survey all 400 students eating in the cafeteria on Monday, because 400 is much bigger than 50.",
+        "is_correct": false,
+        "trick_id": "DAT-1",
+        "trick_name": "Bigger Sample Cures Bias"
+      },
+      {
+        "label": "B",
+        "text": "Survey the 28 students in her own homeroom because they are easy to reach.",
+        "is_correct": false,
+        "trick_id": "DAT-2",
+        "trick_name": "Convenience/Volunteer Samples Are Fair"
+      },
+      {
+        "label": "C",
+        "text": "Post a voluntary online poll on the school website so anyone who wants to can answer.",
+        "is_correct": false,
+        "trick_id": "DAT-2",
+        "trick_name": "Convenience/Volunteer Samples Are Fair"
+      },
+      {
+        "label": "D",
+        "text": "Randomly select 50 names from a list of all 1000 students.",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Random selection from the full student list gives every student an equal chance of being chosen, so the sample represents the whole school. Sample size cannot fix a biased selection method.",
+    "traps": [
+      "Surveying all 400 students eating in the cafeteria on Monday is a large but biased convenience sample - cafeteria users are more invested in the menu.",
+      "A voluntary online poll on the school website is self-selected: only students with strong opinions answer.",
+      "Surveying the 28 students in her own homeroom is a convenience sample of a single classroom."
+    ]
+  },
+  {
+    "id": "DAT-Q2",
+    "strand": "Data",
+    "topic": "measures of centre",
+    "difficulty": "Easy",
+    "question": "What is the median of this data set? 14, 3, 20, 8, 11",
+    "options": [
+      {
+        "label": "A",
+        "text": "11.5",
+        "is_correct": false,
+        "trick_id": "DAT-9",
+        "trick_name": "Median as midpoint of extremes (midrange)"
+      },
+      {
+        "label": "B",
+        "text": "20",
+        "is_correct": false,
+        "trick_id": "DAT-4",
+        "trick_name": "Median Without Ordering"
+      },
+      {
+        "label": "C",
+        "text": "11",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "11.2",
+        "is_correct": false,
+        "trick_id": "DAT-3",
+        "trick_name": "Mean by Default"
+      }
+    ],
+    "correct": "C",
+    "solution": "Order the data first: 3, 8, 11, 14, 20. The middle (3rd of 5) value is 11.",
+    "traps": [
+      "20 is the middle of the UNORDERED list - the values have to be put in order first.",
+      "11.5 is the midpoint of the smallest and largest values, (3+20)/2, not the median.",
+      "11.2 is the mean, 56 ÷ 5, from treating every average as the mean."
+    ]
+  },
+  {
+    "id": "DAT-Q3",
+    "strand": "Data",
+    "topic": "measures of centre",
+    "difficulty": "Medium",
+    "question": "A bar graph shows how many pets students own: 0 pets - 7 students; 1 pet - 9 students; 2 pets - 5 students; 3 pets - 4 students. What is the mode number of pets?",
+    "options": [
+      {
+        "label": "A",
+        "text": "1",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "3",
+        "is_correct": false,
+        "trick_id": "DAT-10",
+        "trick_name": "Mode as the maximum value"
+      },
+      {
+        "label": "C",
+        "text": "9",
+        "is_correct": false,
+        "trick_id": "DAT-5",
+        "trick_name": "Mode/Value-Frequency Mix-Up"
+      },
+      {
+        "label": "D",
+        "text": "1.24",
+        "is_correct": false,
+        "trick_id": "DAT-3",
+        "trick_name": "Mean by Default"
+      }
+    ],
+    "correct": "A",
+    "solution": "The mode is the data VALUE that occurs most often. The tallest bar is at 1 pet (9 students), so the mode is 1.",
+    "traps": [
+      "9 is the height (frequency) of the tallest bar, not the value it stands above.",
+      "3 is the largest data value, not the most common one.",
+      "1.24 is the mean, (0·7+1·9+2·5+3·4) ÷ 25 = 31 ÷ 25 = 1.24, from reaching for the mean whenever an average is requested."
+    ]
+  },
+  {
+    "id": "DAT-Q4",
+    "strand": "Data",
+    "topic": "scatter plots and correlation",
+    "difficulty": "Medium",
+    "question": "For 40 fires last year, a city plotted the number of firefighters sent against the damage cost. The scatter plot shows a strong positive correlation. Which conclusion is BEST supported by the data?",
+    "options": [
+      {
+        "label": "A",
+        "text": "The city should send fewer firefighters to each fire to reduce damage costs.",
+        "is_correct": false,
+        "trick_id": "DAT-7",
+        "trick_name": "Correlation Implies Causation"
+      },
+      {
+        "label": "B",
+        "text": "Sending more firefighters causes greater damage.",
+        "is_correct": false,
+        "trick_id": "DAT-7",
+        "trick_name": "Correlation Implies Causation"
+      },
+      {
+        "label": "C",
+        "text": "The line of best fit can reliably predict the damage for a fire with 10 times more firefighters than any fire in the data.",
+        "is_correct": false,
+        "trick_id": "DAT-8",
+        "trick_name": "Best-Fit Line and Extrapolation Overreach"
+      },
+      {
+        "label": "D",
+        "text": "A third variable, such as the size of the fire, likely increases both the firefighters sent and the damage.",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Correlation shows association, not cause. A lurking variable — fire size — drives both variables: bigger fires need more firefighters AND cause more damage.",
+    "traps": [
+      "Saying that sending more firefighters causes greater damage reads the correlation as a causal mechanism.",
+      "Sending fewer firefighters to each fire to reduce damage costs takes that same causal reading and acts on it as policy.",
+      "Predicting the damage for a fire with 10 times more firefighters than any fire in the data trusts extrapolation far beyond the observed data range, where the linear model is not validated."
+    ]
+  },
+  {
+    "id": "DAT-Q5",
+    "strand": "Data",
+    "topic": "measures of centre",
+    "difficulty": "Hard",
+    "question": "A cafe records its daily customers for five days: 30, 26, 102, 28, 29. (Day 3 was a festival.) The owner wants one number that describes a TYPICAL day. Which statement is true?",
+    "options": [
+      {
+        "label": "A",
+        "text": "The median, 29, is best because the outlier 102 pulls the mean up to 43, above every normal day.",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "A typical day is 64 customers, halfway between the lowest (26) and highest (102) values.",
+        "is_correct": false,
+        "trick_id": "DAT-9",
+        "trick_name": "Median as midpoint of extremes (midrange)"
+      },
+      {
+        "label": "C",
+        "text": "The mode is 102 because it is the largest value, so a typical day has 102 customers.",
+        "is_correct": false,
+        "trick_id": "DAT-10",
+        "trick_name": "Mode as the maximum value"
+      },
+      {
+        "label": "D",
+        "text": "The mean, 43, is best because it uses every data value and outliers do not affect it.",
+        "is_correct": false,
+        "trick_id": "DAT-3",
+        "trick_name": "Mean by Default"
+      }
+    ],
+    "correct": "A",
+    "solution": "Ordered data: 26, 28, 29, 30, 102; median = 29. Mean = 215 ÷ 5 = 43, which exceeds four of the five days because the outlier 102 inflates it — so the median better represents a typical day.",
+    "traps": [
+      "Choosing the mean, 43, wrongly claims that outliers do not affect it - the festival day of 102 is exactly what pulls it up.",
+      "64 is the midrange, (26+102)/2, computed as if it were the median.",
+      "102 is the largest value, not the mode."
+    ]
+  },
+  {
+    "id": "GM-01",
+    "strand": "Geometry & Measurement",
+    "topic": "area and changing dimensions",
+    "difficulty": "Easy",
+    "question": "A circular garden in a Hamilton park has a radius of 3 m. The city enlarges the garden by doubling the radius to 6 m. Which value is closest to the area of the enlarged garden?",
+    "options": [
+      {
+        "label": "A",
+        "text": "18.8 m²",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "B",
+        "text": "452.4 m²",
+        "is_correct": false,
+        "trick_id": "GEO-7",
+        "trick_name": "Radius–Diameter Mix-Up"
+      },
+      {
+        "label": "C",
+        "text": "113.1 m²",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "37.7 m²",
+        "is_correct": false,
+        "trick_id": "GEO-1",
+        "trick_name": "Perimeter–Area Mix-Up"
+      }
+    ],
+    "correct": "C",
+    "solution": "The enlarged radius is 6 m. Area = π × r² = π × 6² = 36 × π, which is about 113.1 m². Note that doubling the radius makes the area 4 times as large (36 × π vs 9 × π), not 2 times, because area scales with the SQUARE of the dimensions.",
+    "traps": [
+      "452.4 m² uses the new diameter, 12 m, as the radius: π × 12² is about 452.4.",
+      "37.7 m² is the circumference of the enlarged garden, 2 × π × 6, which is about 37.7 m, not the area.",
+      "18.8 m² multiplies π × 6 without squaring, giving about 18.8."
+    ]
+  },
+  {
+    "id": "GM-02",
+    "strand": "Geometry & Measurement",
+    "topic": "pythagorean theorem",
+    "difficulty": "Easy",
+    "question": "A ramp covers a horizontal distance of 8 m along the ground and rises a vertical height of 6 m. What is the length of the sloped surface of the ramp?",
+    "options": [
+      {
+        "label": "A",
+        "text": "14 m",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "B",
+        "text": "24 m",
+        "is_correct": false,
+        "trick_id": "GEO-1",
+        "trick_name": "Perimeter–Area Mix-Up"
+      },
+      {
+        "label": "C",
+        "text": "10 m",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "100 m",
+        "is_correct": false,
+        "trick_id": "GEO-4",
+        "trick_name": "Forgets the Final Square Root"
+      }
+    ],
+    "correct": "C",
+    "solution": "The ramp is the hypotenuse of a right triangle with legs 6 and 8: c² = 6² + 8² = 36 + 64 = 100, so c = √(100) = 10 m.",
+    "traps": [
+      "14 m adds the legs, 6+8, instead of squaring them first.",
+      "100 m stops at c² = 100 and never takes the square root.",
+      "24 m is the triangle's area, (1/2) × 6 × 8 = 24, not a length."
+    ]
+  },
+  {
+    "id": "GM-03",
+    "strand": "Geometry & Measurement",
+    "topic": "pythagorean theorem",
+    "difficulty": "Medium",
+    "question": "A 13 m ladder leans against a vertical wall. The foot of the ladder is 5 m from the base of the wall. How far up the wall does the ladder reach?",
+    "options": [
+      {
+        "label": "A",
+        "text": "8 m",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "B",
+        "text": "144 m",
+        "is_correct": false,
+        "trick_id": "GEO-4",
+        "trick_name": "Forgets the Final Square Root"
+      },
+      {
+        "label": "C",
+        "text": "approximately 13.9 m",
+        "is_correct": false,
+        "trick_id": "GEO-3",
+        "trick_name": "Always Add in the Pythagorean Theorem"
+      },
+      {
+        "label": "D",
+        "text": "12 m",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "The ladder is the hypotenuse, so the height is a leg: h² = 13² - 5² = 169 - 25 = 144, giving h = √(144) = 12 m.",
+    "traps": [
+      "approximately 13.9 m adds the squares, √(169+25) = √(194) ≈ 13.9, which is impossibly longer than the ladder itself.",
+      "144 m stops at h² = 144 and never takes the square root.",
+      "8 m subtracts the lengths directly, 13 - 5 = 8."
+    ]
+  },
+  {
+    "id": "GM-04",
+    "strand": "Geometry & Measurement",
+    "topic": "angle properties",
+    "difficulty": "Medium",
+    "question": "In the design of a wooden gate, a diagonal brace meets the straight top rail of the gate. On one side of the brace, the angle between the brace and the rail measures 68 degrees. Angle × is the angle between the brace and the rail on the other side of the brace. What is the measure of x?",
+    "options": [
+      {
+        "label": "A",
+        "text": "68 degrees",
+        "is_correct": false,
+        "trick_id": "GEO-6",
+        "trick_name": "Angle Pairs Assumed Equal"
+      },
+      {
+        "label": "B",
+        "text": "112 degrees",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "292 degrees",
+        "is_correct": false,
+        "trick_id": "GEO-10",
+        "trick_name": "Angle Benchmark Mix-Up (90°/180°/360°)"
+      },
+      {
+        "label": "D",
+        "text": "22 degrees",
+        "is_correct": false,
+        "trick_id": "GEO-10",
+        "trick_name": "Angle Benchmark Mix-Up (90°/180°/360°)"
+      }
+    ],
+    "correct": "B",
+    "solution": "The two angles sit on the same side of the straight rail, so together they make a straight angle of 180 degrees: × = 180 - 68 = 112 degrees.",
+    "traps": [
+      "68 degrees assumes the two angles on either side of the brace are equal, but that is only true when the brace is perpendicular to the rail.",
+      "22 degrees uses the 90-degree benchmark: 90 - 68 = 22.",
+      "292 degrees uses the 360-degree benchmark: 360 - 68 = 292, which is not even a possible angle in this design."
+    ]
+  },
+  {
+    "id": "GM-06",
+    "strand": "Geometry & Measurement",
+    "topic": "surface area and volume",
+    "difficulty": "Medium",
+    "question": "A cylindrical can has a diameter of 10 cm and a height of 12 cm. Which value is closest to the volume of the can?",
+    "options": [
+      {
+        "label": "A",
+        "text": "534.1 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-5",
+        "trick_name": "Surface Area–Volume Mix-Up"
+      },
+      {
+        "label": "B",
+        "text": "188.5 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "C",
+        "text": "942.5 cm³",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "3769.9 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-7",
+        "trick_name": "Radius–Diameter Mix-Up"
+      }
+    ],
+    "correct": "C",
+    "solution": "r = 10 ÷ 2 = 5 cm. V = π r² h = π (5)² (12) = 300π ≈ 942.5 cm³.",
+    "traps": [
+      "3769.9 cm³ uses the diameter as the radius: π(10)²(12) = 1200π.",
+      "534.1 cm³ is the total surface area, 2π r h + 2π r² = 170π ≈ 534.1.",
+      "188.5 cm³ forgets to square the radius: π(5)(12) = 60π ≈ 188.5."
+    ]
+  },
+  {
+    "id": "GM-07",
+    "strand": "Geometry & Measurement",
+    "topic": "surface area and volume",
+    "difficulty": "Hard",
+    "question": "A cone-shaped paper cup has a diameter of 6 cm and a vertical height of 4 cm. Which value is closest to the volume of the cup?",
+    "options": [
+      {
+        "label": "A",
+        "text": "150.8 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-7",
+        "trick_name": "Radius–Diameter Mix-Up"
+      },
+      {
+        "label": "B",
+        "text": "37.7 cm³",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "75.4 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-5",
+        "trick_name": "Surface Area–Volume Mix-Up"
+      },
+      {
+        "label": "D",
+        "text": "113.1 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-8",
+        "trick_name": "Dropped Formula Factor"
+      }
+    ],
+    "correct": "B",
+    "solution": "r = 6 ÷ 2 = 3 cm. V = (1/3)π r² h = (1/3)π(3)²(4) = 12π ≈ 37.7 cm³.",
+    "traps": [
+      "113.1 cm³ omits the (1/3): π(9)(4) = 36π ≈ 113.1.",
+      "150.8 cm³ uses the diameter as the radius: (1/3)π(6)²(4) = 48π ≈ 150.8.",
+      "75.4 cm³ is the total surface area: slant height s = √(3²+4²) = 5, so π r² + π r s = 9π + 15π = 24π ≈ 75.4."
+    ]
+  },
+  {
+    "id": "GM-08",
+    "strand": "Geometry & Measurement",
+    "topic": "area and changing dimensions",
+    "difficulty": "Hard",
+    "question": "A rectangular photo measures 10 cm by 15 cm. It is enlarged so that its length and its width are each tripled. The area of the enlarged photo is how many times the area of the original photo?",
+    "options": [
+      {
+        "label": "A",
+        "text": "6 times",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "B",
+        "text": "3 times",
+        "is_correct": false,
+        "trick_id": "GEO-9",
+        "trick_name": "Length Determines Area/Volume (Linear Scaling)"
+      },
+      {
+        "label": "C",
+        "text": "9 times",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "27 times",
+        "is_correct": false,
+        "trick_id": "GEO-5",
+        "trick_name": "Surface Area–Volume Mix-Up"
+      }
+    ],
+    "correct": "C",
+    "solution": "Original area = 10 × 15 = 150 cm². Enlarged area = 30 × 45 = 1350 cm². Ratio = 1350 ÷ 150 = 9 = 3²: when lengths scale by k, area scales by k².",
+    "traps": [
+      "3 times assumes the area triples along with the sides.",
+      "6 times adds the factors, 3 + 3 = 6, instead of multiplying 3 × 3.",
+      "27 times applies the volume scale factor 3³ = 27 to an area."
+    ]
+  },
+  {
+    "id": "GM-10",
+    "strand": "Geometry & Measurement",
+    "topic": "surface area and volume",
+    "difficulty": "Easy",
+    "question": "A gift box is a rectangular prism measuring 5 cm by 4 cm by 3 cm. A chocolate inside the box has the shape of a pyramid with the same rectangular base and the same height as the box. What is the volume of the chocolate?",
+    "options": [
+      {
+        "label": "A",
+        "text": "12 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-2",
+        "trick_name": "Additive/Linear Formula Reasoning"
+      },
+      {
+        "label": "B",
+        "text": "60 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-8",
+        "trick_name": "Dropped Formula Factor"
+      },
+      {
+        "label": "C",
+        "text": "20 cm³",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "94 cm³",
+        "is_correct": false,
+        "trick_id": "GEO-5",
+        "trick_name": "Surface Area–Volume Mix-Up"
+      }
+    ],
+    "correct": "C",
+    "solution": "The volume of the prism (the box) is 5 × 4 × 3 = 60 cm³. A pyramid with the same base and height has one third of the prism's volume: 60 / 3 = 20 cm³.",
+    "traps": [
+      "94 cm³ is the box's surface area, 2 × (20 + 15 + 12) = 94 cm², not a volume.",
+      "60 cm³ drops the one-third factor and gives the full prism volume.",
+      "12 cm³ adds the dimensions: 5 + 4 + 3 = 12."
+    ]
+  },
+  {
+    "id": "FIN-Q1",
+    "strand": "Financial Literacy",
+    "topic": "budgeting and saving",
+    "difficulty": "Easy",
+    "question": "Priya has a part-time job in Barrie and earns $800 each month. She saves 3% of her earnings every month. How much money will she have saved in total after 6 months?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$14,400.00",
+        "is_correct": false,
+        "trick_id": "FIN-9",
+        "trick_name": "Percent–decimal conversion error"
+      },
+      {
+        "label": "B",
+        "text": "$4,656.00",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      },
+      {
+        "label": "C",
+        "text": "$144.00",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "$24.00",
+        "is_correct": false,
+        "trick_id": "FIN-3",
+        "trick_name": "Time-period mishandling"
+      }
+    ],
+    "correct": "C",
+    "solution": "Each month Priya saves 3% of $800: 0.03 × 800 = $24. Over 6 months she saves 6 × 24 = $144.",
+    "traps": [
+      "$24.00 is only one month of savings - it ignores the 6-month period.",
+      "$4,656.00 is the money she does NOT save: 800 - 24 = $776 per month, and 6 × 776 = $4,656 - the wrong quantity.",
+      "$14,400.00 uses 3 instead of 0.03, giving 800 × 3 = $2,400 per month and 6 × 2,400 = $14,400."
+    ]
+  },
+  {
+    "id": "FIN-Q2",
+    "strand": "Financial Literacy",
+    "topic": "appreciation and depreciation",
+    "difficulty": "Medium",
+    "question": "A graph shows the value of Dario's investment, which grows by 4% of its current value each year. The graph shows these values: $1,000.00 at year 0, $1,040.00 at year 1, and $1,081.60 at year 2. What value will the graph show at year 3?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$1,120.00",
+        "is_correct": false,
+        "trick_id": "FIN-1",
+        "trick_name": "Simple–compound conflation"
+      },
+      {
+        "label": "B",
+        "text": "$1,124.86",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "$1,514.24",
+        "is_correct": false,
+        "trick_id": "FIN-9",
+        "trick_name": "Percent–decimal conversion error"
+      },
+      {
+        "label": "D",
+        "text": "$124.86",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      }
+    ],
+    "correct": "B",
+    "solution": "The value grows by 4% of the CURRENT value, so the year 3 value is 4% more than the year 2 value: 1,081.60 × 0.04 = 43.26, and 1,081.60 + 43.26 = $1,124.86.",
+    "traps": [
+      "$1,120.00 assumes the graph rises by the same flat $40 every year, the year 1 increase, giving 1,000 + 3 × 40 = $1,120.00 and missing the growth on growth the graph shows.",
+      "$124.86 is the total increase since year 0, 1,124.86 - 1,000 = $124.86, instead of the value.",
+      "$1,514.24 converts 4% to 0.4, giving 1,081.60 × 1.4 = $1,514.24."
+    ]
+  },
+  {
+    "id": "FIN-Q3",
+    "strand": "Financial Literacy",
+    "topic": "appreciation and depreciation",
+    "difficulty": "Medium",
+    "question": "A graph shows the value of a used car bought in Sudbury for $24,000. The car loses 15% of its current value each year, and the graph shows its value is $20,400 after 1 year. What value will the graph show after 2 years?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$16,800",
+        "is_correct": false,
+        "trick_id": "FIN-4",
+        "trick_name": "Additive percent change"
+      },
+      {
+        "label": "B",
+        "text": "$3,060",
+        "is_correct": false,
+        "trick_id": "FIN-5",
+        "trick_name": "\"By r%\" read as \"to r%\""
+      },
+      {
+        "label": "C",
+        "text": "$20,400",
+        "is_correct": false,
+        "trick_id": "FIN-3",
+        "trick_name": "Time-period mishandling"
+      },
+      {
+        "label": "D",
+        "text": "$17,340",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Each year the car keeps 100% - 15% = 85% of its CURRENT value. The year 2 value is 85% of the year 1 value: 20,400 × 0.85 = $17,340.",
+    "traps": [
+      "$16,800 subtracts 15% of the ORIGINAL price again: 20,400 - 3,600 = $16,800, treating the drop as a fixed dollar amount.",
+      "$3,060 reduces the value TO 15% instead of BY 15%: 20,400 × 0.15 = $3,060.",
+      "$20,400 stops at the year 1 value, applying the decrease only once."
+    ]
+  },
+  {
+    "id": "FIN-Q4",
+    "strand": "Financial Literacy",
+    "topic": "comparing costs and payment plans",
+    "difficulty": "Easy",
+    "question": "A store sells juice in two sizes: 1.5 L for $3.60 and 2 L for $5.00. Which bottle is the better buy, and why?",
+    "options": [
+      {
+        "label": "A",
+        "text": "The 1.5 L bottle, because its total price of $3.60 is lower than $5.00",
+        "is_correct": false,
+        "trick_id": "FIN-6",
+        "trick_name": "Value judged by size or total price"
+      },
+      {
+        "label": "B",
+        "text": "The 1.5 L bottle, because $3.60 divided by 1.5 is $2.40 per litre, which is less than $5.00 divided by 2, which is $2.50 per litre",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "The 2 L bottle, because 2 divided by 5.00 equals 0.40, which is smaller than 1.5 divided by 3.60, which is about 0.42",
+        "is_correct": false,
+        "trick_id": "FIN-10",
+        "trick_name": "Rate inversion"
+      },
+      {
+        "label": "D",
+        "text": "The 2 L bottle, because larger packages always cost less per litre",
+        "is_correct": false,
+        "trick_id": "FIN-6",
+        "trick_name": "Value judged by size or total price"
+      }
+    ],
+    "correct": "B",
+    "solution": "Compare unit prices (dollars per litre): 3.60 ÷ 1.5 = $2.40/L and 5.00 ÷ 2 = $2.50/L. Since 2.40 < 2.50, the 1.5 L bottle is the better buy.",
+    "traps": [
+      "Picking the 2 L bottle because larger packages always cost less per litre assumes bigger is automatically cheaper per unit, without calculating.",
+      "Picking the 2 L bottle because 2 divided by 5.00 equals 0.40, which is smaller than 1.5 divided by 3.60, about 0.42, computes litres per dollar but then treats the smaller number as the cheaper option - for litres per dollar, bigger is better.",
+      "Picking the 1.5 L bottle because its total price of $3.60 is lower than $5.00 compares total prices, which ignores that the bottles contain different amounts."
+    ]
+  },
+  {
+    "id": "FIN-Q5",
+    "strand": "Financial Literacy",
+    "topic": "budgeting and saving",
+    "difficulty": "Medium",
+    "question": "Zainab's net income is $1,480 per month. Her fixed expenses are rent $450, phone $65, and a transit pass $128. Her variable expenses last month were food $310 and entertainment $150. She also wants to put $300 into savings each month. If next month looks the same, how much money will she have left after all expenses and savings?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$837",
+        "is_correct": false,
+        "trick_id": "FIN-7",
+        "trick_name": "Incomplete budget"
+      },
+      {
+        "label": "B",
+        "text": "$377",
+        "is_correct": false,
+        "trick_id": "FIN-7",
+        "trick_name": "Incomplete budget"
+      },
+      {
+        "label": "C",
+        "text": "$77",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "$1,403",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      }
+    ],
+    "correct": "C",
+    "solution": "Total allocations: fixed 450 + 65 + 128 = $643, variable 310 + 150 = $460, savings $300. Total = 643 + 460 + 300 = $1403. Money left = 1480 - 1403 = $77.",
+    "traps": [
+      "$837 subtracts only the fixed expenses: 1480 - 643 = $837.",
+      "$1,403 is the total spent, instead of the money remaining.",
+      "$377 forgets to treat the planned savings as part of the budget: 1480 - 1103 = $377."
+    ]
+  },
+  {
+    "id": "FIN-Q6",
+    "strand": "Financial Literacy",
+    "topic": "simple and compound interest",
+    "difficulty": "Hard",
+    "question": "Ken wants to deposit $2,000 for 2 years and uses an online calculator to compare two savings accounts. For Account 1, which pays 6% per year simple interest, the calculator shows a final value of $2,240.00. For Account 2, which pays 6% per year compounded annually, the calculator shows $2,120.00 after 1 year and $2,247.20 after 2 years. How much MORE money does Account 2 give than Account 1 at the end of the 2 years?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$127.20",
+        "is_correct": false,
+        "trick_id": "FIN-3",
+        "trick_name": "Time-period mishandling"
+      },
+      {
+        "label": "B",
+        "text": "$0.00, because both accounts pay 6% per year, so they must give the same amount",
+        "is_correct": false,
+        "trick_id": "FIN-1",
+        "trick_name": "Simple–compound conflation"
+      },
+      {
+        "label": "C",
+        "text": "$247.20",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      },
+      {
+        "label": "D",
+        "text": "$7.20",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Compare the two final values from the calculator for the SAME time period, 2 years: 2,247.20 - 2,240.00 = $7.20. Account 2 earns interest on its interest, so it pulls ahead even though both rates are 6%.",
+    "traps": [
+      "$0.00 assumes equal rates mean equal earnings, ignoring the way the interest is calculated.",
+      "$127.20 compares values from different time periods: 2,247.20 - 2,120.00 = $127.20 uses Account 2 at 2 years but Account 1 at only 1 year, since 2,000 + 120 = $2,120.",
+      "$247.20 is Account 2's total interest earned, 2,247.20 - 2,000 = $247.20, instead of the difference between the accounts."
+    ]
+  },
+  {
+    "id": "FIN-Q8",
+    "strand": "Financial Literacy",
+    "topic": "appreciation and depreciation",
+    "difficulty": "Easy",
+    "question": "A graph on a collector's website shows the value of a limited-edition sneaker bought in Toronto for $150. The sneaker's value grows by 10% of its current value each year, and the graph shows its value is $165.00 after 1 year. What value will the graph show after 2 years?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$165.00",
+        "is_correct": false,
+        "trick_id": "FIN-3",
+        "trick_name": "Time-period mishandling"
+      },
+      {
+        "label": "B",
+        "text": "$180.00",
+        "is_correct": false,
+        "trick_id": "FIN-4",
+        "trick_name": "Additive percent change"
+      },
+      {
+        "label": "C",
+        "text": "$181.50",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "$31.50",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      }
+    ],
+    "correct": "C",
+    "solution": "The value grows by 10% of the CURRENT value, so the year 2 value is 10% more than the year 1 value: 165.00 × 0.10 = 16.50, and 165.00 + 16.50 = $181.50.",
+    "traps": [
+      "$180.00 adds 10% of the original price, $15, again: 165 + 15 = $180.00, missing the growth on growth.",
+      "$165.00 stops at the year 1 value, applying the increase only once.",
+      "$31.50 is the total gain in value, 181.50 - 150 = $31.50, instead of the value itself."
+    ]
+  },
+  {
+    "id": "FIN-Q9",
+    "strand": "Financial Literacy",
+    "topic": "comparing costs and payment plans",
+    "difficulty": "Hard",
+    "question": "A phone costs $600 if you pay up front. A payment plan instead charges $55 per month for 12 months. How much MORE does the payment plan cost in total than paying up front?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$0 — twelve payments of $55 just spread the same cost over time",
+        "is_correct": false,
+        "trick_id": "FIN-8",
+        "trick_name": "Payment-size fallacy"
+      },
+      {
+        "label": "B",
+        "text": "$660",
+        "is_correct": false,
+        "trick_id": "FIN-2",
+        "trick_name": "Wrong quantity reported"
+      },
+      {
+        "label": "C",
+        "text": "$60",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "$5",
+        "is_correct": false,
+        "trick_id": "FIN-3",
+        "trick_name": "Time-period mishandling"
+      }
+    ],
+    "correct": "C",
+    "solution": "Total cost of the plan: 55 × 12 = $660. Difference: 660 - 600 = $60 more than paying up front.",
+    "traps": [
+      "$660 is the plan's total cost, not the extra cost the question asks for.",
+      "$0 assumes installments never add cost, ignoring that 55 × 12 > 600.",
+      "$5 compares one month only: 600 ÷ 12 = $50 and 55 - 50 = $5, forgetting to multiply the monthly difference by all 12 months."
+    ]
+  },
+  {
+    "id": "EQAO-2025-NUM-03",
+    "strand": "Number",
+    "topic": "powers and exponent laws",
+    "difficulty": "Easy",
+    "question": "Simplify (-36a⁴b⁶) / (-4ab²).",
+    "options": [
+      {
+        "label": "A",
+        "text": "9a⁴b⁴",
+        "is_correct": false,
+        "trick_id": "NUM-EXP-01",
+        "trick_name": "Forgets to subtract the exponent of a when dividing like bases"
+      },
+      {
+        "label": "B",
+        "text": "9a³b⁴",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "-9a³b⁴",
+        "is_correct": false,
+        "trick_id": "NUM-SIGN-01",
+        "trick_name": "Thinks a negative divided by a negative stays negative"
+      },
+      {
+        "label": "D",
+        "text": "-9a⁴b⁴",
+        "is_correct": false,
+        "trick_id": "NUM-EXP-SIGN-01",
+        "trick_name": "Combines the exponent error with the sign error"
+      }
+    ],
+    "correct": "B",
+    "solution": "-36 ÷ -4 = 9. For the letters, subtract exponents: a⁴ ÷ a is a^(4-1) = a³, and b⁶ ÷ b² is b^(6-2) = b⁴. So the simplified expression is 9a³b⁴.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-NUM-04",
+    "strand": "Number",
+    "topic": "powers and exponent laws",
+    "difficulty": "Medium",
+    "question": "Write the value of (5⁴ times 5⁴ times 5^(-2)) divided by (5³ times 5^(-6)) in scientific notation.",
+    "options": [
+      {
+        "label": "A",
+        "text": "1.6384 x 10^(-10)",
+        "is_correct": false,
+        "trick_id": "NUM-EXP-04",
+        "trick_name": "Multiplies the exponents instead of adding when multiplying like bases, giving 5^(-14)"
+      },
+      {
+        "label": "B",
+        "text": "1.25 x 10²",
+        "is_correct": false,
+        "trick_id": "NUM-EXP-02",
+        "trick_name": "Adds the exponents instead of subtracting when dividing powers, giving 5^3 = 125"
+      },
+      {
+        "label": "C",
+        "text": "5 x 10³",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-01",
+        "trick_name": "Adds the exponents when dividing to get 5^3, then writes base 5 as if it were base 10"
+      },
+      {
+        "label": "D",
+        "text": "1.953125 x 10⁶",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Combine the exponents on top: 5^(4+4-2) = 5⁶. Combine the exponents on the bottom: 5^(3-6) = 5^(-3). Then 5⁶ divided by 5^(-3) = 5^(6-(-3)) = 5⁹ = 1,953,125, which is 1.953125 x 10⁶ in scientific notation.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-ALG-07",
+    "strand": "Algebra",
+    "topic": "patterns and modelling",
+    "difficulty": "Easy",
+    "question": "Mia's pay, P, in dollars for making n birdhouses is P = 24.50n + 15. What is her pay for making 8 birdhouses?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$211.00",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "$196.00",
+        "is_correct": false,
+        "trick_id": "ALG-SUB-03",
+        "trick_name": "Leaves out the fixed amount"
+      },
+      {
+        "label": "C",
+        "text": "$181.00",
+        "is_correct": false,
+        "trick_id": "ALG-SUB-02",
+        "trick_name": "Subtracts the fixed amount instead of adding it"
+      },
+      {
+        "label": "D",
+        "text": "$39.50",
+        "is_correct": false,
+        "trick_id": "ALG-SUB-01",
+        "trick_name": "Adds the rate and the fixed amount, ignoring the 8 birdhouses"
+      }
+    ],
+    "correct": "A",
+    "solution": "Substitute n = 8: P = 24.50 x 8 + 15 = 196 + 15 = 211. Mia earns $211.00.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-COD-10",
+    "strand": "Algebra",
+    "topic": "coding and pseudocode",
+    "difficulty": "Medium",
+    "question": "In pseudocode, itemPrice is the original price and percentDiscount is the discount percent. Which line correctly calculates subtotal, the sale price before tax?",
+    "options": [
+      {
+        "label": "A",
+        "text": "subtotal = itemPrice + (itemPrice * percentDiscount / 100)",
+        "is_correct": false,
+        "trick_id": "FIN-DISC-03",
+        "trick_name": "Adds the discount instead of subtracting it"
+      },
+      {
+        "label": "B",
+        "text": "subtotal = itemPrice - (percentDiscount / 100)",
+        "is_correct": false,
+        "trick_id": "FIN-DISC-02",
+        "trick_name": "Subtracts a decimal rate from a dollar amount"
+      },
+      {
+        "label": "C",
+        "text": "subtotal = itemPrice * (percentDiscount / 100)",
+        "is_correct": false,
+        "trick_id": "FIN-DISC-01",
+        "trick_name": "Calculates the discount amount instead of the sale price"
+      },
+      {
+        "label": "D",
+        "text": "subtotal = itemPrice - (itemPrice * percentDiscount / 100)",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "The discount amount is itemPrice * percentDiscount / 100. A sale price is the original price minus that amount, so the correct line is subtotal = itemPrice - (itemPrice * percentDiscount / 100).",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-ALG-14",
+    "strand": "Algebra",
+    "topic": "slope and intercept",
+    "difficulty": "Medium",
+    "question": "A line is represented by y = 6x. Its slope doubles and its y-intercept decreases by 5. What is the equation of the new line?",
+    "options": [
+      {
+        "label": "A",
+        "text": "y = 8x + 5",
+        "is_correct": false,
+        "trick_id": "ALG-LIN-03",
+        "trick_name": "Adds 2 to the slope instead of doubling it, and moves the intercept in the wrong direction"
+      },
+      {
+        "label": "B",
+        "text": "y = 12x + 5",
+        "is_correct": false,
+        "trick_id": "ALG-LIN-01",
+        "trick_name": "Changes the intercept in the wrong direction"
+      },
+      {
+        "label": "C",
+        "text": "y = 12x - 5",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "y = 8x - 5",
+        "is_correct": false,
+        "trick_id": "ALG-LIN-02",
+        "trick_name": "Adds 2 to the slope instead of doubling it"
+      }
+    ],
+    "correct": "C",
+    "solution": "The original slope is 6 and the original y-intercept is 0. Doubling the slope gives 12, and decreasing the intercept by 5 gives -5. So the new line is y = 12x - 5.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-GEO-20",
+    "strand": "Geometry & Measurement",
+    "topic": "unit conversion",
+    "difficulty": "Medium",
+    "question": "One city block is 1/8 mile. Use 1 mile = 1609.3 m. Approximately how far, in metres, does a person walk in 5 blocks?",
+    "options": [
+      {
+        "label": "A",
+        "text": "1006 m",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "2575 m",
+        "is_correct": false,
+        "trick_id": "GEO-CONV-03",
+        "trick_name": "Multiplies by 8/5 instead of 5/8, flipping the fraction of a mile"
+      },
+      {
+        "label": "C",
+        "text": "625 m",
+        "is_correct": false,
+        "trick_id": "GEO-CONV-02",
+        "trick_name": "Uses 1 mile = 1000 m instead of 1609.3 m"
+      },
+      {
+        "label": "D",
+        "text": "201 m",
+        "is_correct": false,
+        "trick_id": "GEO-CONV-01",
+        "trick_name": "Finds the length of one block only"
+      }
+    ],
+    "correct": "A",
+    "solution": "5 blocks is 5 times 1/8 = 5/8 mile. Then 5/8 of 1609.3 m is 1005.8125 m, which is approximately 1006 m.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2025-FIN-23",
+    "strand": "Financial Literacy",
+    "topic": "comparing costs and payment plans",
+    "difficulty": "Hard",
+    "question": "A laptop costs $500. Option A requires a 10% down payment and $20.63 per month for 2 years. Option B requires no down payment and $15.56 per month for 3 years. Which statement is correct?",
+    "options": [
+      {
+        "label": "A",
+        "text": "Option A costs $5.07 less than Option B.",
+        "is_correct": false,
+        "trick_id": "FIN-PAY-01",
+        "trick_name": "Compares monthly payments instead of total costs"
+      },
+      {
+        "label": "B",
+        "text": "Option A costs $15.04 less than Option B.",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "Option B costs $15.04 less than Option A.",
+        "is_correct": false,
+        "trick_id": "FIN-PAY-02",
+        "trick_name": "Finds the right difference but reverses which option is cheaper"
+      },
+      {
+        "label": "D",
+        "text": "Option B costs $5.07 less than Option A.",
+        "is_correct": false,
+        "trick_id": "FIN-PAY-01",
+        "trick_name": "Compares monthly payments instead of total costs"
+      }
+    ],
+    "correct": "B",
+    "solution": "Option A costs 10% of $500 plus 24 payments of $20.63: 50 + 495.12 = $545.12. Option B costs 36 payments of $15.56: $560.16. The difference is 560.16 - 545.12 = $15.04, so Option A costs $15.04 less.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-NUM-01",
+    "strand": "Number",
+    "topic": "number sets and multiples",
+    "difficulty": "Easy",
+    "question": "Which number is irrational?",
+    "options": [
+      {
+        "label": "A",
+        "text": "-4",
+        "is_correct": false,
+        "trick_id": "NUM-SET-01",
+        "trick_name": "Thinks negative integers are irrational"
+      },
+      {
+        "label": "B",
+        "text": "0.35",
+        "is_correct": false,
+        "trick_id": "NUM-SET-02",
+        "trick_name": "Thinks all decimals are irrational"
+      },
+      {
+        "label": "C",
+        "text": "√3",
+        "is_correct": true
+      },
+      {
+        "label": "D",
+        "text": "5",
+        "is_correct": false,
+        "trick_id": "NUM-SET-03",
+        "trick_name": "Thinks a plain whole number like 5 can be irrational"
+      }
+    ],
+    "correct": "C",
+    "solution": "-4, 0.35, and 5 can each be written as a fraction of integers, so they are rational. Since 3 is not a perfect square, √3 is irrational.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-NUM-02",
+    "strand": "Number",
+    "topic": "number sets and multiples",
+    "difficulty": "Medium",
+    "question": "Set F = {2, 4, 6, 8, 10, 12, ...}. Set G is the set of whole-number multiples of 3. Which statement describes all numbers common to both sets?",
+    "options": [
+      {
+        "label": "A",
+        "text": "They are always odd.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-02",
+        "trick_name": "Ignores that every number in Set F is even"
+      },
+      {
+        "label": "B",
+        "text": "There are no common numbers.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-03",
+        "trick_name": "Misses the common multiples the sets share"
+      },
+      {
+        "label": "C",
+        "text": "They are always divisible by 4.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-01",
+        "trick_name": "Picks an unrelated divisor from the even-number pattern"
+      },
+      {
+        "label": "D",
+        "text": "They are always multiples of 6.",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Set F contains the multiples of 2, and Set G contains the multiples of 3. Numbers in both sets are multiples of the least common multiple of 2 and 3, which is 6.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-NUM-03",
+    "strand": "Number",
+    "topic": "scientific notation",
+    "difficulty": "Easy",
+    "question": "Which value is equivalent to 1.2 x 10⁴?",
+    "options": [
+      {
+        "label": "A",
+        "text": "120,000",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-04",
+        "trick_name": "Moves the decimal five places instead of four"
+      },
+      {
+        "label": "B",
+        "text": "1200",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-03",
+        "trick_name": "Moves the decimal three places instead of four"
+      },
+      {
+        "label": "C",
+        "text": "120",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-02",
+        "trick_name": "Moves the decimal two places instead of four"
+      },
+      {
+        "label": "D",
+        "text": "12,000",
+        "is_correct": true
+      }
+    ],
+    "correct": "D",
+    "solution": "Multiplying by 10⁴ moves the decimal point four places to the right: 1.2 becomes 12,000.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-ALG-07",
+    "strand": "Algebra",
+    "topic": "algebraic expressions",
+    "difficulty": "Medium",
+    "question": "Simplify 2x(x² - 3x + 2).",
+    "options": [
+      {
+        "label": "A",
+        "text": "2x² - 6x + 4",
+        "is_correct": false,
+        "trick_id": "ALG-DIST-01",
+        "trick_name": "Multiplies by 2 but forgets to multiply each term by x"
+      },
+      {
+        "label": "B",
+        "text": "2x³ - 6x² + 4x",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "2x² - 3x + 2",
+        "is_correct": false,
+        "trick_id": "ALG-DIST-02",
+        "trick_name": "Multiplies only the first term, and only by the 2, leaving the other terms unchanged"
+      },
+      {
+        "label": "D",
+        "text": "2x³ - 3x² + 2x",
+        "is_correct": false,
+        "trick_id": "ALG-DIST-03",
+        "trick_name": "Multiplies by x but forgets the coefficient 2 on later terms"
+      }
+    ],
+    "correct": "B",
+    "solution": "Multiply 2x by every term: 2x times x² is 2x³, 2x times -3x is -6x², and 2x times 2 is 4x. So the answer is 2x³ - 6x² + 4x.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-ALG-08",
+    "strand": "Algebra",
+    "topic": "patterns and modelling",
+    "difficulty": "Easy",
+    "question": "A game awards 100 points for each blue box, b, and subtracts 50 points for each yellow box, y. Which expression represents the total score?",
+    "options": [
+      {
+        "label": "A",
+        "text": "100y - 50b",
+        "is_correct": false,
+        "trick_id": "ALG-MODEL-03",
+        "trick_name": "Swaps the variables and reverses the gain and loss"
+      },
+      {
+        "label": "B",
+        "text": "100b - 50y",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "100b + 50y",
+        "is_correct": false,
+        "trick_id": "ALG-MODEL-01",
+        "trick_name": "Ignores the loss from yellow boxes"
+      },
+      {
+        "label": "D",
+        "text": "100y + 50b",
+        "is_correct": false,
+        "trick_id": "ALG-MODEL-02",
+        "trick_name": "Swaps what the variables stand for"
+      }
+    ],
+    "correct": "B",
+    "solution": "Blue boxes add 100b points. Yellow boxes take away 50y points. The total is 100b - 50y.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2024-COD-10",
+    "strand": "Algebra",
+    "topic": "coding and pseudocode",
+    "difficulty": "Medium",
+    "question": "Which pseudocode line correctly calculates the hypotenuse from sideA and sideB?",
+    "options": [
+      {
+        "label": "A",
+        "text": "hypotenuse = sqrt(sideA - sideB)",
+        "is_correct": false,
+        "trick_id": "GEO-PYT-01",
+        "trick_name": "Subtracts the side lengths without squaring them"
+      },
+      {
+        "label": "B",
+        "text": "hypotenuse = sqrt(sideA * sideA + sideB * sideB)",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "hypotenuse = sqrt(sideA * sideA - sideB * sideB)",
+        "is_correct": false,
+        "trick_id": "GEO-PYT-03",
+        "trick_name": "Subtracts the squared legs instead of adding them"
+      },
+      {
+        "label": "D",
+        "text": "hypotenuse = sqrt(sideA + sideB)",
+        "is_correct": false,
+        "trick_id": "GEO-PYT-02",
+        "trick_name": "Adds the side lengths without squaring them"
+      }
+    ],
+    "correct": "B",
+    "solution": "For a right triangle, c = √(a² + b²). In pseudocode, squaring can be written as multiplying a value by itself, so use sqrt(sideA * sideA + sideB * sideB).",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2023-NUM-01",
+    "strand": "Number",
+    "topic": "number sets and multiples",
+    "difficulty": "Easy",
+    "question": "How many real numbers are between 0 and 10?",
+    "options": [
+      {
+        "label": "A",
+        "text": "100",
+        "is_correct": false,
+        "trick_id": "NUM-DENS-03",
+        "trick_name": "Assumes numbers stop at a fixed decimal precision"
+      },
+      {
+        "label": "B",
+        "text": "An infinite number",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "9",
+        "is_correct": false,
+        "trick_id": "NUM-DENS-01",
+        "trick_name": "Counts only the whole numbers strictly between the endpoints"
+      },
+      {
+        "label": "D",
+        "text": "10",
+        "is_correct": false,
+        "trick_id": "NUM-DENS-02",
+        "trick_name": "Counts whole-number steps or includes an endpoint"
+      }
+    ],
+    "correct": "B",
+    "solution": "Between any two different real numbers there are infinitely many other real numbers. For example, between 0 and 10 are 0.1, 0.01, √2, π, and infinitely many more.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2023-NUM-02",
+    "strand": "Number",
+    "topic": "number sets and multiples",
+    "difficulty": "Easy",
+    "question": "Which statement about rational numbers is correct?",
+    "options": [
+      {
+        "label": "A",
+        "text": "A rational number can be written as a fraction of integers.",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "A rational number is always positive.",
+        "is_correct": false,
+        "trick_id": "NUM-RAT-01",
+        "trick_name": "Thinks rational numbers cannot be negative"
+      },
+      {
+        "label": "C",
+        "text": "The square root of every number is rational.",
+        "is_correct": false,
+        "trick_id": "NUM-RAT-02",
+        "trick_name": "Assumes all square roots are rational"
+      },
+      {
+        "label": "D",
+        "text": "A rational number has a non-ending, non-repeating decimal.",
+        "is_correct": false,
+        "trick_id": "NUM-RAT-03",
+        "trick_name": "Mixes up the decimal properties of rational and irrational numbers"
+      }
+    ],
+    "correct": "A",
+    "solution": "A rational number can be written as p/q, where p and q are integers and q is not 0. Its decimal either terminates or repeats.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2023-NUM-03",
+    "strand": "Number",
+    "topic": "number sets and multiples",
+    "difficulty": "Medium",
+    "question": "Set C = {3, 6, 9, 12, ...}. Set D is the set of integer multiples of 5. Which statement describes all numbers common to both sets?",
+    "options": [
+      {
+        "label": "A",
+        "text": "They are always divisible by 9.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-04",
+        "trick_name": "Picks a number seen in one set that both sets do not require"
+      },
+      {
+        "label": "B",
+        "text": "They are always multiples of 15.",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "They are always odd.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-05",
+        "trick_name": "Guesses odd or even from just a few examples"
+      },
+      {
+        "label": "D",
+        "text": "There are no common numbers.",
+        "is_correct": false,
+        "trick_id": "NUM-MULT-03",
+        "trick_name": "Misses the common multiples the sets share"
+      }
+    ],
+    "correct": "B",
+    "solution": "The common numbers are multiples of both 3 and 5, so they are multiples of the least common multiple of 3 and 5, which is 15.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2023-NUM-04",
+    "strand": "Number",
+    "topic": "scientific notation",
+    "difficulty": "Easy",
+    "question": "Which value is equivalent to 3.5 x 10⁵?",
+    "options": [
+      {
+        "label": "A",
+        "text": "350,000",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "3,500,000",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-04",
+        "trick_name": "Moves the decimal one place too far"
+      },
+      {
+        "label": "C",
+        "text": "350",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-02",
+        "trick_name": "Moves the decimal too few places"
+      },
+      {
+        "label": "D",
+        "text": "35,000",
+        "is_correct": false,
+        "trick_id": "NUM-SCI-03",
+        "trick_name": "Moves the decimal one place too few"
+      }
+    ],
+    "correct": "A",
+    "solution": "10⁵ = 100,000, so 3.5 x 100,000 = 350,000.",
+    "traps": []
+  },
+  {
+    "id": "EQAO-2023-FIN-31",
+    "strand": "Financial Literacy",
+    "topic": "budgeting and saving",
+    "difficulty": "Medium",
+    "question": "A monthly income is $2800. Monthly expenses are rent $1500, utilities $350, food $400, and other expenses $345. Which statement is true?",
+    "options": [
+      {
+        "label": "A",
+        "text": "The budget does not need to be modified because expenses are less than income.",
+        "is_correct": true
+      },
+      {
+        "label": "B",
+        "text": "If utilities decrease by $205, expenses will equal income.",
+        "is_correct": false,
+        "trick_id": "FIN-BUD-02",
+        "trick_name": "Changes the budget in the wrong direction"
+      },
+      {
+        "label": "C",
+        "text": "If rent increases by $105, expenses will equal income.",
+        "is_correct": false,
+        "trick_id": "FIN-BUD-03",
+        "trick_name": "Uses the wrong amount for the gap between income and expenses"
+      },
+      {
+        "label": "D",
+        "text": "The budget needs to be modified because expenses are more than income.",
+        "is_correct": false,
+        "trick_id": "FIN-BUD-01",
+        "trick_name": "Totals the expenses incorrectly or compares the totals the wrong way"
+      }
+    ],
+    "correct": "A",
+    "solution": "Current expenses are 1500 + 350 + 400 + 345 = $2595, which is less than the $2800 income, so the budget already balances with $205 left over.",
+    "traps": [
+      "Saying the budget needs to be modified because expenses are more than income compares the totals the wrong way: $2595 is less than $2800.",
+      "Rent increasing by $105 would not make expenses equal income - rent would have to increase by $205, the size of the surplus.",
+      "Utilities decreasing by $205 moves the budget the wrong way; it would only make the surplus bigger."
+    ]
+  },
+  {
+    "id": "EQAO-2023-FIN-33",
+    "strand": "Financial Literacy",
+    "topic": "comparing costs and payment plans",
+    "difficulty": "Hard",
+    "question": "A person borrows money for a $3000 purchase at 0% interest. Which plan pays off the loan in the least time?",
+    "options": [
+      {
+        "label": "A",
+        "text": "$600 down and $50 monthly",
+        "is_correct": false,
+        "trick_id": "FIN-LOAN-02",
+        "trick_name": "Assumes the biggest down payment means the fastest payoff"
+      },
+      {
+        "label": "B",
+        "text": "$300 down and $50 every two weeks",
+        "is_correct": true
+      },
+      {
+        "label": "C",
+        "text": "$600 down and $30 every two weeks",
+        "is_correct": false,
+        "trick_id": "FIN-LOAN-03",
+        "trick_name": "Does not compare how much each plan pays per year"
+      },
+      {
+        "label": "D",
+        "text": "$300 down and $75 monthly",
+        "is_correct": false,
+        "trick_id": "FIN-LOAN-01",
+        "trick_name": "Looks at payment size but not payment frequency or remaining balance"
+      }
+    ],
+    "correct": "B",
+    "solution": "The plan with $300 down and $50 every two weeks leaves 2700 to pay: 2700 / 50 = 54 biweekly payments, which is about 24.9 months - the least time of the four plans.",
+    "traps": [
+      "$300 down and $75 monthly: 2700 / 75 = 36 months. The larger payment looks faster, but it arrives only once a month.",
+      "$600 down and $50 monthly: 2400 / 50 = 48 months. The biggest down payment does not mean the fastest payoff.",
+      "$600 down and $30 every two weeks: 2400 / 30 = 80 biweekly payments, which is about 36.9 months. Paying every two weeks helps only when the payment is large enough."
+    ]
+  }
+]

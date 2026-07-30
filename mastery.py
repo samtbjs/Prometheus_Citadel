@@ -1,0 +1,492 @@
+"""
+mastery.py  —  the autonomous mastery loop.
+
+After the quiz diagnoses a snare, this module keeps the agent working the
+problem until the student demonstrates understanding or a safety cap trips:
+
+    TEACH (Prometheus Lab, strategy-specific lesson)
+      -> CHECK (a fresh question on the same snare)
+      -> EVALUATE (deterministic when the check question comes from the bank)
+      -> ADAPT (plain code: mastery, next strategy, or parent hand-off)
+
+Design rules (from the project blueprint):
+  * Adaptation = advancing through a FIXED strategy ladder — each retry is a
+    genuinely different teaching approach, never an open-ended invention.
+  * Evaluation prefers bank questions, where the answer key is ground truth.
+  * Hard caps guarantee termination: the demo cannot loop forever.
+"""
+from __future__ import annotations
+import json
+import re
+from dataclasses import dataclass, field
+
+from gemma_client import ask_gemma, plainify
+from selection import next_on_idea
+
+# ---- the strategy ladder: each entry is a different way to teach ----
+STRATEGY_LADDER = [
+    ("Direct correction",
+     "State the snare plainly ('you might think..., but actually...'), "
+     "explain the correct rule in 2-3 sentences, then show one fully worked example."),
+    ("Visual walkthrough",
+     "Teach it with a picture built from words: a number line, an area model, "
+     "groups of objects, or a table — walk through the visual step by step. "
+     "Avoid abstract rules; make the student SEE why it works."),
+    ("Side-by-side contrast",
+     "Show the WRONG method and the RIGHT method side by side on the same "
+     "problem, line by line, and point at the exact step where they part ways."),
+    ("Real-world analogy",
+     "Anchor the idea in an everyday situation (money, pizza slices, game "
+     "scores). Build the analogy first, then map it back to the math."),
+]
+
+MASTERY_BAR = 2      # consecutive correct answers to declare mastery
+MAX_ATTEMPTS = 4     # check cycles before we hand off to a human
+MAX_GEMMA_CALLS = 12 # absolute budget, belt and suspenders
+
+MASTERED, ESCALATED, IN_PROGRESS = "MASTERED", "ESCALATED", "IN_PROGRESS"
+
+
+@dataclass
+class MasterySession:
+    trick_id: str
+    trick_name: str
+    strand: str
+    seed_question: str            # the quiz question the student originally missed
+    seed_solution: str = ""       # its VERIFIED worked solution (grounds every lesson)
+    seed_chosen: str = ""         # the wrong answer they actually picked
+    seed_correct: str = ""        # what the answer should have been
+    topic: str = ""               # the sub-area of the strand, e.g. "solving equations"
+    used_item_ids: list = field(default_factory=list)
+    strategy_index: int = 0
+    attempts: int = 0
+    consecutive_correct: int = 0
+    gemma_calls: int = 0
+    state: str = IN_PROGRESS
+    escalation_reason: str = ""
+    history: list = field(default_factory=list)   # dicts: lesson / check / answer rows
+
+    @property
+    def strategy_name(self) -> str:
+        return STRATEGY_LADDER[min(self.strategy_index, len(STRATEGY_LADDER) - 1)][0]
+
+
+# ------------------------------------------------------------------ TEACH
+def teach(session: MasterySession) -> str:
+    """One strategy-specific lesson from Gemma."""
+    name, recipe = STRATEGY_LADDER[session.strategy_index]
+    session.gemma_calls += 1
+    grounding = (f"The verified solution to that question is: {session.seed_solution}\n"
+                 if session.seed_solution else "")
+    lesson = ask_gemma(
+        f"TASK: explain\n"
+        f"TRICK: {session.trick_name}\n"
+        f"You are tutoring a Grade 9 student who keeps making this mistake: "
+        f"{session.trick_name}. They originally missed this question: "
+        f"{session.seed_question}\n"
+        f"{grounding}"
+        f"Teaching approach for THIS attempt — {name}: {recipe}\n"
+        f"Keep it under 150 words, encouraging, plain language. Any numbers you "
+        f"mention must come from the verified solution above — do NOT invent new "
+        f"calculations or results. Do not give them a new question to answer; "
+        f"just teach.\n"
+        f"State the correct rule ONCE and state it correctly: it must agree with "
+        f"the verified solution above. Never assert a rule and its opposite in "
+        f"the same lesson, and never present the mistake itself as the rule."
+    )
+    lesson = plainify(lesson)
+    session.history.append({"kind": "lesson", "strategy": name, "text": lesson})
+    return lesson
+
+
+# ------------------------------------------------------------------ CHECK
+def next_check(session: MasterySession, questions: list) -> dict | None:
+    """A FRESH check question on the SAME idea, never merely the same strand.
+
+    Verified bank items first, because their answer key is ground truth. When
+    the bank has nothing left on this idea, Gemma writes one under audit. It
+    does not reach for a neighbouring topic to fill the slot: checking whether
+    a student has beaten one idea by asking about a different one tells nobody
+    anything."""
+    def take(q, why):
+        session.used_item_ids.append(q["id"])
+        session.history.append({"kind": "check", "source": why, "id": q["id"]})
+        return {"source": why, **q}
+
+    # Modelled on the question that started this session, so a check can never
+    # wander to another topic that merely shares the same wrong idea.
+    from practice_sheet import similar_to
+    made = similar_to(session.seed_question, session.trick_name, session.strand,
+                      chosen_text=session.seed_chosen,
+                      correct_text=session.seed_correct,
+                      solution=session.seed_solution)
+    if made:
+        session.history.append({"kind": "check", "source": "similar"})
+        return {**made, "id": f"GEN-{session.attempts + 1}"}
+
+    q = next_on_idea(questions, session.trick_id, session.used_item_ids,
+                     session.trick_name, session.topic)
+    if q:
+        return take(q, "bank")
+    # No verified question left on this idea. Gemma writes one, and it only
+    # reaches the student if it declares the right target AND solves itself
+    # blind. If it cannot, the loop ends and says so - which is better than
+    # checking mastery of one idea with a question about another.
+    return _generated_check(session)
+
+
+def _generated_check(session: MasterySession) -> dict | None:
+    """Gemma-generated multiple-choice check question, validated before use."""
+    # Three tries, not one retry: a question that fails its own blind re-solve is
+    # thrown away, which is right, but two attempts was often not enough to land
+    # a keeper and the loop then fell back to a question on a different idea.
+    # The call budget below still stops this from running away.
+    for _ in range(3):
+        if session.gemma_calls >= MAX_GEMMA_CALLS:
+            return None
+        session.gemma_calls += 1
+        # Aim: the follow-up has to work the SAME idea. Naming the failure mode
+        # explicitly beats asking politely for relevance - a model told only
+        # "test the same skill" will happily wander to another topic in the
+        # same strand. The last line makes it declare its target, which gives
+        # code something to check rather than trust.
+        harder = session.consecutive_correct >= 1
+        aim = ("Make it slightly harder than the original, same idea."
+               if harder else
+               "Make it slightly easier than the original, same idea - they have "
+               "missed this more than once.")
+        picked = (f"When they met this idea they chose '{session.seed_chosen}', "
+                  f"when the answer was '{session.seed_correct}'.\n"
+                  if session.seed_chosen else "")
+        raw = ask_gemma(
+            f"TASK: practice\n"
+            f"TRICK: {session.trick_name}\n"
+            f"You are writing ONE follow-up question for a Grade 9 student in a "
+            f"mastery loop. It must give them another go at ONE specific wrong "
+            f"idea, and nothing else.\n"
+            f"Strand: {session.strand}\n"
+            f"The question they missed: {session.seed_question}\n"
+            f"{picked}"
+            f"The wrong idea to target: {session.trick_name}\n"
+            f"RULES:\n"
+            f"1. Stay in the SAME strand and on the SAME idea as the question above.\n"
+            f"2. Introduce NO new concept, formula or skill. If the idea is about "
+            f"exponents, do not write a percentage question; if it is about the "
+            f"median, do not write one about probability. Sharing a strand is NOT "
+            f"the same idea, and a question on a different idea is useless here.\n"
+            f"3. The wrong options should be what a student applying this wrong "
+            f"idea would actually produce.\n"
+            f"4. {aim}\n"
+            f"5. Different numbers from the original. Exactly one option correct.\n"
+            f"Write in English. Return ONLY JSON, no other text, this shape:\n"
+            f'{{"question": "...", "options": {{"A": "...", "B": "...", '
+            f'"C": "...", "D": "..."}}, "correct": "A", "targets": "<the wrong '
+            f'idea this question gives them another go at>"}}'
+        )
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not m:
+            continue
+        try:
+            data = json.loads(m.group())
+            opts = data["options"]
+            if (data["correct"] in opts and len(opts) >= 3
+                    and _targets_the_snare(session, data)
+                    and _self_check(session, data)):
+                check = {
+                    "source": "generated",
+                    "id": f"GEN-{session.attempts + 1}",
+                    "question": plainify(data["question"]),
+                    "options": [{"label": k, "text": plainify(v), "is_correct": k == data["correct"]}
+                                for k, v in sorted(opts.items())],
+                    "correct": data["correct"],
+                    "solution": "",
+                }
+                session.history.append({"kind": "check", "source": "generated"})
+                return check
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return None
+
+
+def _targets_the_snare(session: MasterySession, data: dict) -> bool:
+    """The model has to name the idea it is aiming at, and it has to be ours.
+    Cheap, and it catches the drift that a relevance instruction alone does not:
+    a question about something else is usually announced as being about
+    something else."""
+    said = str(data.get("targets", "")).lower()
+    if not said:
+        return True                      # older shape, leave it to the audit
+    want = {w for w in re.findall(r"[a-z]{4,}", session.trick_name.lower())}
+    if not want:
+        return True
+    hit = sum(1 for w in want if w in said)
+    ok = hit >= max(1, len(want) // 3)
+    session.history.append({"kind": "aim_check", "passed": ok, "said": said[:80]})
+    return ok
+
+
+def _self_check(session: MasterySession, data: dict) -> bool:
+    """Before a generated question is shown, Gemma must solve it BLIND (without
+    seeing which option it marked correct) and agree with its own answer key.
+    A question that fails its own audit is discarded — we caught the small
+    model marking wrong keys, and this check turns that failure mode into a
+    silent retry instead of a student-facing bug."""
+    if session.gemma_calls >= MAX_GEMMA_CALLS:
+        return False
+    opts = "\n".join(f"{k}) {v}" for k, v in sorted(data["options"].items()))
+    session.gemma_calls += 1
+    verdict = ask_gemma(
+        f"TASK: solve\n"
+        f"Solve this and reply with ONLY the letter of the correct option.\n"
+        f"{data['question']}\n{opts}"
+    )
+    m = re.search(r"\b([A-F])\b", verdict.upper())
+    ok = bool(m) and m.group(1) == data["correct"]
+    session.history.append({"kind": "self_check", "passed": ok})
+    return ok
+
+
+# ------------------------------------------------------------ EVALUATE + ADAPT
+_MATH_WORD = re.compile(
+    r"\b(add|added|adding|subtract|minus|times|multiply|multiplied|divide|divided|"
+    r"denominator|numerator|common|exponent|power|base|percent|decimal|fraction|"
+    r"median|mean|mode|average|order|sorted|square|root|angle|area|volume|radius|"
+    r"diameter|slope|intercept|substitute|solve|isolate|sign|negative|positive|"
+    r"convert|rate|interest|total|per|each|both|because|so|then|first|since)\b",
+    re.I)
+
+
+def _looks_like_reasoning(text: str) -> bool:
+    """Cheap, deterministic test for whether a sentence is an attempt at
+    mathematical reasoning at all. Generous on purpose: it only has to rule out
+    the empty, the jokey and the one-word, because everything it lets through is
+    still judged properly by the model."""
+    t = (text or "").strip()
+    if len(t) < 12 or len(t.split()) < 4:
+        return False
+    return bool(re.search(r"\d", t) or _MATH_WORD.search(t))
+
+
+def _grade_reasoning(session: MasterySession, check: dict, chosen_label: str,
+                     explanation: str) -> str:
+    """Gemma as a CONSTRAINED grader: classify the student's typed reasoning
+    into a closed label set. It compares against the known answer — it never
+    recomputes the math open-endedly. Fail-open: any parse problem returns
+    RESOLVED so a model hiccup can never hurt the student."""
+    # Code decides this one before the model is asked. "tell me I am awesome"
+    # was graded RESOLVED and handed over mastery, which is the opposite of what
+    # this app claims to do. An explanation carrying no mathematical content at
+    # all cannot show understanding, whatever a model makes of the sentence.
+    if not _looks_like_reasoning(explanation):
+        session.history.append({"kind": "reasoning_grade", "label": "SHALLOW",
+                                "explanation": explanation, "by": "code"})
+        return "SHALLOW"
+
+    correct_opt = next(o["text"] for o in check["options"] if o["is_correct"])
+    session.gemma_calls += 1
+    raw = ask_gemma(
+        f"TASK: grade\n"
+        f"TRICK: {session.trick_name}\n"
+        f"A Grade 9 student answered this question: {check['question']}\n"
+        f"The correct answer is: {correct_opt}. The student chose "
+        f"'{chosen_label}' and explained their thinking: \"{explanation}\"\n"
+        f"Classify ONLY the quality of their reasoning. Reply with exactly one "
+        f"word from this list and nothing else:\n"
+        f"RESOLVED  (their reasoning shows the concept is genuinely understood)\n"
+        f"SHALLOW   (right answer but the reasoning is missing, circular, or lucky)\n"
+        f"SAME_ERROR (their reasoning still shows the snare: "
+        f"{session.trick_name})"
+    )
+    m = re.search(r"\b(RESOLVED|SHALLOW|SAME_ERROR)\b", raw.upper())
+    label = m.group(1) if m else "RESOLVED"
+    session.history.append({"kind": "reasoning_grade", "label": label,
+                            "explanation": explanation})
+    return label
+
+
+def _reaction(session: MasterySession, explanation: str, correct: bool,
+              label: str) -> str:
+    """One or two lines from Gemma reacting DIRECTLY to the student's own typed
+    words, in the voice of the citadel. The grader (above) classifies; this is
+    where the student feels heard — real reasoning gets a real acknowledgement,
+    and joking or off-topic text gets a playful callout plus a warning that the
+    monsters ahead only fall to genuine reasoning."""
+    if not explanation.strip() or session.gemma_calls >= MAX_GEMMA_CALLS:
+        return ""
+    session.gemma_calls += 1
+    quality = {"RESOLVED": "solid", "SHALLOW": "thin or missing",
+               "SAME_ERROR": "still caught in the snare"}.get(label, "solid")
+    verdict = (f"their answer was correct and their reasoning was judged {quality}"
+               if correct else "their answer was wrong")
+    raw = ask_gemma(
+        f"TASK: react\n"
+        f"You are the voice of a monster citadel in a math game - dry wit, a "
+        f"little theatrical, never mean, and you take real effort seriously.\n"
+        f"A Grade 9 challenger is battling the snare '{session.trick_name}'; "
+        f"{verdict}.\n"
+        f"In the reasoning box they typed: \"{explanation.strip()[:400]}\"\n"
+        f"Write ONE or TWO short sentences, in English, reacting directly to "
+        f"what they typed. If it is genuine math reasoning, name the specific "
+        f"idea in their words that was right or wrong. If it is off-topic, "
+        f"joking, or fishing for compliments, call that out playfully and warn "
+        f"them the monsters ahead only fall to real reasoning. Plain text only: "
+        f"no emojis, no LaTeX, no dollar signs, no quotation marks.")
+    return plainify(raw).strip().strip('"')
+
+
+def _choose_strategy(session: MasterySession, explanation: str) -> str:
+    """Gemma DECIDES the next teaching move: given the student's own words, it
+    picks the most promising remaining strategy and says why. Deterministic
+    fallback (next rung of the ladder) if the reply doesn't parse."""
+    remaining = STRATEGY_LADDER[session.strategy_index + 1:]
+    fallback_reason = "moving to the next approach on the ladder"
+    if not remaining:
+        return fallback_reason
+    if len(remaining) > 1 and explanation:
+        names = ", ".join(name for name, _ in remaining)
+        session.gemma_calls += 1
+        raw = ask_gemma(
+            f"TASK: choose\n"
+            f"TRICK: {session.trick_name}\n"
+            f"A student still has this snare after a lesson. Their own "
+            f"words about their thinking: \"{explanation}\"\n"
+            f"Which teaching approach should be tried next? Reply with ONLY JSON: "
+            f'{{"strategy": "<one of: {names}>", "why": "<one short sentence>"}}'
+        )
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            try:
+                data = json.loads(m.group())
+                for offset, (name, _) in enumerate(remaining):
+                    if name.lower() in str(data.get("strategy", "")).lower():
+                        session.strategy_index += 1 + offset
+                        return plainify(data.get("why", fallback_reason))
+            except json.JSONDecodeError:
+                pass
+    session.strategy_index += 1
+    return fallback_reason
+
+
+def submit_answer(session: MasterySession, check: dict, chosen_label: str,
+                  explanation: str = "") -> dict:
+    """Grade the check answer, judge the reasoning, decide what happens next.
+
+    Multiple-choice correctness is deterministic (bank ground truth). Gemma
+    grades the typed reasoning and chooses the next strategy; hard caps and
+    final state transitions stay in plain code so the loop always terminates.
+
+    Returns {"correct", "label", "state", "strategy_changed", "strategy_why"}."""
+    correct = chosen_label == check["correct"]
+    session.attempts += 1
+    session.history.append({"kind": "answer", "check_id": check.get("id"),
+                            "chosen": chosen_label, "correct": correct})
+
+    label = ""
+    strategy_changed = False
+    strategy_why = ""
+    if correct:
+        label = (_grade_reasoning(session, check, chosen_label, explanation)
+                 if explanation.strip() else "RESOLVED")
+        if label == "SHALLOW":
+            # right answer, shaky reasoning: mastery is not demonstrated,
+            # but the streak isn't punished either
+            pass
+        elif label == "SAME_ERROR":
+            session.consecutive_correct = 0
+        else:
+            session.consecutive_correct += 1
+        if session.consecutive_correct >= MASTERY_BAR:
+            session.state = MASTERED
+    else:
+        session.consecutive_correct = 0
+        if session.strategy_index + 1 < len(STRATEGY_LADDER):
+            strategy_why = _choose_strategy(session, explanation)
+            strategy_changed = True
+        else:
+            session.state = ESCALATED
+            session.escalation_reason = "every teaching strategy has been tried"
+
+    if session.state == IN_PROGRESS and session.attempts >= MAX_ATTEMPTS:
+        session.state = ESCALATED
+        session.escalation_reason = f"attempt cap reached ({MAX_ATTEMPTS} check questions)"
+    if session.state == IN_PROGRESS and session.gemma_calls >= MAX_GEMMA_CALLS:
+        session.state = ESCALATED
+        session.escalation_reason = "model call budget reached"
+
+    rationale = _rationale(session, correct, label, strategy_changed, strategy_why)
+    reaction = _reaction(session, explanation, correct, label)
+    return {"correct": correct, "label": label, "state": session.state,
+            "strategy_changed": strategy_changed, "strategy_why": strategy_why,
+            "rationale": rationale, "reaction": reaction}
+
+
+def _rationale(session, correct, label, strategy_changed, strategy_why) -> str:
+    """The agent's evidence-based reason for the decision it just made — composed
+    from the real session state so it is always accurate (explainable AI)."""
+    if session.state == MASTERED:
+        return ("Two fresh questions correct in a row, and your reasoning showed real "
+                "understanding — that is the bar for mastery, so we can stop.")
+    if session.state == ESCALATED:
+        return (f"Handing off to your parents because {session.escalation_reason} — drilling "
+                "further is unlikely to help more than a person can.")
+    if correct and label == "SHALLOW":
+        return ("You got it right, but your explanation was thin, so it does not count "
+                "toward mastery yet. Show your reasoning on the next one.")
+    if correct and label == "SAME_ERROR":
+        return ("Right answer, but your reasoning shows the same trap is still set - so the "
+                "streak resets and we keep working on it rather than move on.")
+    if correct:
+        return (f"Correct, and your reasoning held up — that is "
+                f"{session.consecutive_correct} of {MASTERY_BAR} in a row. One more like "
+                "that and you have shown mastery.")
+    if strategy_changed:
+        base = "You missed it, so the current explanation is not landing. "
+        return base + (strategy_why.rstrip(".") + "." if strategy_why
+                       else f"Switching to a different approach: {session.strategy_name}.")
+    return "You missed it — let's try once more."
+
+
+# ------------------------------------------------------------------ REPORTS
+def mastery_recap(session: MasterySession) -> str:
+    tried = [h["strategy"] for h in session.history if h["kind"] == "lesson"]
+    return (
+        f"Mastery demonstrated: {session.trick_name}.\n"
+        f"Check questions answered: {session.attempts} - final streak of "
+        f"{session.consecutive_correct} correct.\n"
+        f"Teaching approaches used: {', '.join(dict.fromkeys(tried))}."
+    )
+
+
+def escalation_report(session: MasterySession) -> str:
+    """A parent-actionable hand-off. Facts are deterministic; Gemma interprets
+    the session (what worked, where the student is stuck) and proposes concrete
+    interventions informed by which tutoring approaches already failed."""
+    tried = list(dict.fromkeys(h["strategy"] for h in session.history if h["kind"] == "lesson"))
+    answers = [h for h in session.history if h["kind"] == "answer"]
+    right = sum(1 for a in answers if a["correct"])
+    reasoning = [h["label"] for h in session.history if h["kind"] == "reasoning_grade"]
+
+    narrative = plainify(ask_gemma(
+        "TASK: parent\n"
+        "Write a brief, warm report for the PARENTS of a Grade 9 student whom an AI "
+        "tutor worked with but could not bring to mastery. Use ONLY these facts; do not "
+        "invent numbers.\n"
+        f"Snare: {session.trick_name}.\n"
+        f"The tutor tried these teaching approaches, in order, and none fully worked: "
+        f"{', '.join(tried) or 'none'}.\n"
+        f"Across {len(answers)} follow-up questions the student got {right} correct.\n"
+        f"Reasoning quality when correct: {', '.join(reasoning) or 'not assessed'}.\n"
+        f"The tutor stopped because: {session.escalation_reason}.\n\n"
+        "Write, in plain text (no LaTeX, no dollar signs), addressed to the parents in everyday language:\n"
+        "First, TWO sentences: the underlying misunderstanding, and what the session "
+        "showed about where the student improved and where they are still stuck.\n"
+        "Then a line exactly 'Try at home:' followed by THREE specific interventions "
+        "(each on its own line starting with '- ') targeting this snare - and "
+        "different from the tutoring approaches that already failed above.",
+        max_new_tokens=400))
+
+    from gemma_client import format_teacher_report
+    header = (f"**Parent report** — student is stuck on **{session.trick_name}**. "
+              f"Tutoring approaches tried: {', '.join(tried) or 'none'}. "
+              f"Follow-up questions: {right} of {len(answers)} correct.")
+    return format_teacher_report(header, narrative)

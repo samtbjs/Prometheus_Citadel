@@ -1,76 +1,171 @@
-# Prometheus Lab
+# PROMETHEUS LAB
 
-An anomaly-investigation game built with Python + Streamlit. You play a
-researcher inside a broken-physics research facility, walking through
-three wings (Mechanics, Thermal, Space-Time), reasoning through why
-each "impossible" scene is actually behaving correctly, and getting
-in-character feedback from the facility's diagnostic AI, ARBITER.
+*A math adventure powered by OpenAI's GPT-4o-mini — built for the GDG Windsor Build with AI hackathon, Edge/On-Device track.*
 
-## Setup (from zero)
+## Screenshots
+
+<!-- drop the four PNGs into docs/screens/ to light these up -->
+
+<img width="1912" height="901" alt="citadel" src="https://github.com/user-attachments/assets/c1089e4b-5246-43e4-9464-6fb4e47b033d" />
+<br>
+<b>The Citadel: drag to orbit the castle; five monsters wait on their floating platforms.</b?
+<br>
+<br>
+<br>
+<img width="1157" height="782" alt="taha" src="https://github.com/user-attachments/assets/e37f082b-d0f8-49d5-b08b-69f19226e177" />
+<br>
+<br>
+<b>An encounter: the monster calls you by name, and Prometheus Lab writes what it remembers about you.</b>
+<br>
+<br>
+<br>
+<img width="977" height="907" alt="sg" src="https://github.com/user-attachments/assets/443aa3a4-8b96-4cf5-a2e5-7e0ad8ff2cbb" />
+<br>
+<br>
+<b> The battle report: what got you, why it felt right, and the study guide that fixes it.</b>
+<br>
+<br>
+<br>
+<img width="1917" height="917" alt="col" src="https://github.com/user-attachments/assets/5b035bed-e4bb-4eb2-9ae2-1fc8389e625f" />
+<br>
+<br>
+<b>The Collector: three lives, a speed trial, and no patience for slow arithmetic.</b>
+<br>
+<br>
+<br>
+<img width="1002" height="902" alt="md" src="https://github.com/user-attachments/assets/d6139b3a-d72b-4b83-ad94-f54528997a0d" />
+<br>
+<br>
+<b>Parent Digest: automated student progress report.</b>
+
+## The story
+
+The Citadel is locked from the outside. Someone is trapped in the keep behind a golden gate, and five monsters hold the seal — each one perched on a floating platform, guarding one strand of Grade 9 math. Every monster is out to make you slip, and each has its own favourite way of doing it: a wrong idea that feels right, which is exactly why it works. You cannot beat a monster by luck. You beat it by proving its trick doesn't fool you anymore: two fresh questions in a row, with reasoning that holds up.
+
+Defeat all five and the seal breaks, the gate opens, and the rescue is yours. Fail too often, though, and the monsters' boss takes an interest. They call him the Collector. They do not joke about him.
+
+## Your first minute
+
+A new challenger opens on a short introduction, in the same 3D world as the game: the title, the five monsters standing in a row with the strand each one guards, how a battle is actually won, the Collector arriving in colder light, and the promise that all of it runs on this laptop. Five beats, its own theme, a **Skip intro** button in the corner, and it never shows twice in a sitting.
+
+## The monsters
+
+| Monster | Strand | Its trick |
+|---|---|---|
+| **Fractis** | Number | Whispers "just add fractions straight across." Tops with tops, bottoms with bottoms. Feels tidy. Totally wrong. It fears a common denominator. |
+| **Equazor** | Algebra | Twists your equations so signs flip the wrong way when you move things across the equals sign. Hates when you balance both sides. |
+| **Statiq** | Data | Blurs mean and median into one fuzzy word so you grab the wrong one. Falls apart the moment you put the data in order. |
+| **Polygor** | Geometry & Measurement | Hoards angles and hands you stolen area formulas that almost fit. One honest diagram and it crumbles. |
+| **Ledgerling** | Financial Literacy | Skims your interest while you sleep and hopes you never check the math. A sharp budget cuts it down. |
+
+And above them all: **THE COLLECTOR**, a giant skull who runs mental-math speed trials — three lives, incoming attacks — with three lieutenants softening you up in the training grounds: **Twinfang** (doubles), **The Niner** (nines), and **Splitjaw** (make-a-ten).
+
+## How to play
+
+1. Watch the introduction, or skip it. Then enter your hero name — the monsters will use it, and they will remember you.
+2. Enter the Citadel. Drag to orbit the castle, then click a monster on its platform. **Sound: on** in the header turns the music and the battle audio off and on; every arena honours it.
+3. The encounter takes over the screen. The monster taunts you by name; come back after a loss and it gloats about last time.
+4. Face its quiz. The battle report shows exactly which tricks got you, then a Prometheus Lab-grounded study guide explains each one — with real fraction and exponent notation, never recomputed math.
+5. Now the agent steps in: it teaches, then puts a fresh check question to you and reads both your answer and your typed reasoning. Say how you got there and the citadel answers you back, in its own voice, naming the idea you got right or the one that slipped. A right answer with wobbly reasoning does not count. When a lesson doesn't land, Prometheus Lab switches teaching strategies and tells you why.
+6. Master the trick and Prometheus Lab forges you a relic — a trophy written from your actual battle. Struggle too long and the Collector is summoned instead, along with a Prometheus Lab-written note for mum and dad.
+7. Prometheus Lab also decides where you go next: after a battle it names the monster worth hunting and says what in your run made that the answer, and outside the Collector's arena it picks which lieutenant to drill.
+8. Between battles, hit the training grounds: 90-second war-clock skirmishes against the lieutenants, with streaks that raise the stakes. Prometheus Lab whispers each lane's mental strategy before the fight, and afterward **GET COACHED BY PROMETHEUS LAB** names your miss pattern, teaches the fix, and sets a three-question drill.
+9. Defeat all five monsters to break the seal on the golden gate and free whoever is locked in the keep.
+
+Not in the mood for monsters? Simple mode (no game, same brain) is one click away.
+
+## For mum and dad
+
+There is a **For mum and dad** button pinned to every screen. It opens the letters home: every note the agent has written about your child, newest first.
+
+- A note goes home after **any** battle where something was missed — not just the bad days — so the pattern and the progress are both visible.
+- Beating a trick is a letter too. Good news gets sent, with the evidence the agent used to call it mastery.
+- The notes are kept on this machine (`data/letters/`), so closing the tab does not lose them. They also download as one file.
+- Each trick on the page offers **Make a practice sheet**: ten questions on that one trick, printable, with space to work and an answer key on its own page. Verified bank questions go on first; if Prometheus Lab writes any extras, it has to solve each one again — blind, without seeing the key it just wrote — and agree with itself before it reaches the paper.
+
+## What GEMMA does behind the curtain
+
+Prometheus Lab calls OpenAI's GPT-4o-mini to do the actual thinking, one job per line:
+
+| Job | What Prometheus Lab does |
+|---|---|
+| Rescue lessons | Writes the lesson that pulls you out after a monster gets you. |
+| Reasoning check | Reads HOW you got your answer — a right answer with wobbly reasoning does not count. |
+| Answering you back | Replies to your typed reasoning in the citadel's voice, naming what you actually said. |
+| Next move | Picks its next teaching move and tells you why. |
+| Where you go next | Chooses the monster to hunt or the lieutenant to drill, and names the evidence. |
+| Fresh questions | Forges brand-new questions, then secretly re-solves them to check its own answer key. |
+| Printable practice | Fills out a parent's practice sheet when the bank runs short — under the same blind audit. |
+| Battle memory | Writes each monster's opening line from what it remembers about you. |
+| Relic forging | Names and inscribes the relic you earn from the trick you beat. |
+| Skirmish coaching | Reads your misses and hesitations, names the pattern, and sets your drill. |
+| Strategy whispers | Teaches you each lieutenant's lane — doubles, nines, make-a-ten — before the fight. |
+| Note for mum and dad | Writes your parents a note they can actually use at the kitchen table. |
+
+One plain fact: the math answers always come from a bank of 55 verified questions — every one inside what the EQAO Grade 9 assessment covers and mapped to a published MTH1W expectation, with the answer key spread evenly across A to D so it cannot be gamed, and every wrong option tagged with the trick it reveals. Where a question explains its traps, those notes are keyed to the answer's text rather than its letter, so they stay true however the options are ordered. Never from the model guessing.
+
+Engineers and judges: the serious version of all this lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Run it
 
 ```bash
-# 1. Clone/unzip, then move into the project folder
-cd prometheus_lab_fixed/project
-
-# 2. Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
+```
 
-# 4. (Optional, see below) add your OpenAI API key
-echo "OPENAI_API_KEY=sk-..." > .env
+For the live brain, add your OpenAI key to a local `.env` file:
 
-# 5. Run it
+```bash
+cp .env.example .env
+# then edit .env and set OPENAI_API_KEY=sk-...
+```
+
+Then launch the game:
+
+```bash
 streamlit run app.py
 ```
 
-Streamlit will open the app at `http://localhost:8501`.
+Without an `OPENAI_API_KEY` set, the app still runs, just with placeholder
+text instead of model output.
 
-## Do you need an OpenAI API key?
+### Switching models
 
-**No** — the whole game is playable without one.
+One environment variable, and every call site moves with it — no code
+changes. Set it in `.env` or on the command line:
 
-- **With a key** (`.env` with `OPENAI_API_KEY`): each submitted
-  explanation is graded live by an AI tutor, which also replies in
-  character as ARBITER.
-- **Without a key**: submissions still work. If no key is set (or the
-  API call fails for any reason — no internet, rate limit, etc.), the
-  app automatically falls back to a mock verdict so the game never
-  breaks.
-- **To manually control the mock verdict** (useful for quickly seeing
-  all outcomes — resolved / thin / wrong — without depending on the
-  API), open the app with `?debug=1` appended to the URL, e.g.
-  `http://localhost:8501/?debug=1`. This reveals a "Use mock verdict"
-  checkbox plus a few other developer-only tools (instant chapter
-  unlock, jump-to-Debrief) for quickly exercising every scene. None of
-  this appears on the plain URL.
-
-## What to click first (guided tour)
-
-1. **Boot sequence** — click "ENTER FACILITY."
-2. **Command Center** — three wings are shown; only *Fundamental
-   Forces* (Mechanics) is unlocked at the start. Click it.
-3. **Mission Briefing** — ARBITER briefs you on the wing. Click
-   "Begin Investigation."
-4. **Anomaly menu** — pick **The Floating Box** (`vacuum_box`) and
-   click "Enter."
-5. Answer the numeric force question and the reasoning prompt, then
-   click **ANALYZE**. Do this twice with correct reasoning to clear
-   the anomaly and trigger the **Mission Debrief** scene.
-6. Clearing every anomaly in a wing unlocks the next one — try
-   clearing both Mechanics anomalies to unlock *Energy & Heat*.
-
-## Project structure
-
+```bash
+OPENAI_MODEL=gpt-4o-mini streamlit run app.py   # default
+OPENAI_MODEL=gpt-4o streamlit run app.py        # a larger option, if you want it
 ```
-app.py                  Main Streamlit app / screen routing
-ai/tutor.py              Live AI grading + ARBITER's in-character reply
-logic/                   Progress tracking, streak rules, physics checks
-ui/                      Styling, design tokens, mentor text, 3D scene wiring
-scenes/                  Three.js/GSAP scene HTML (boot, briefing, anomaly, etc.)
-data/anomalies.json      Chapters, anomalies, and questions
-data/progress.json       Player save state (resets to `{}` on a fresh checkout)
-static/vendor/           Locally vendored Three.js + GSAP (no CDN)
+
+`gpt-4o-mini` is the model the game is tuned for and defaults to.
+
+A slower model can outlast the default 120-second timeout. Nothing breaks if
+it does — the app falls back to placeholder text for that one call — but you
+can raise the ceiling:
+
+```bash
+OPENAI_TIMEOUT_S=300 streamlit run app.py
 ```
+
+Where the size shows: the guardrails are the same, so what changes is the
+quality of the prose and how often a written question survives its own audit.
+That is why the code — never the model — owns the streak, the caps and every
+number on the page.
+
+## Credits
+
+- Built with OpenAI's GPT-4o-mini, called over the API.
+- Monster models (Alien, Demon, Dragon Evolved, Fish, Frog) and the Collector's skull by Quaternius (quaternius.com), CC0 public domain — thank you Quaternius.
+- three.js and its loaders are vendored into `static/vendor`.
+- The citadel, introduction and Collector themes were generated with ElevenLabs by the team and ship in `static/audio`; battle stingers are procedural WebAudio. Nothing is fetched from the internet at runtime.
+
+## License
+
+Apache 2.0 — the full text is in [LICENSE](LICENSE), and [NOTICE](NOTICE) carries
+the attribution that redistributions have to keep.
+
+Copyright 2026 Amarah.
+
+---
+*Built for the GDG Windsor · Build with AI — Gemma Hackathon. Edge / On-Device track.*
