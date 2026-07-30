@@ -24,7 +24,7 @@
 \usepackage{hyperref}
 
 % ---------- the model, named in exactly one place ----------
-\newcommand{\themodel}{Gemma}
+\newcommand{\themodel}{GPT-4o-mini}
 
 % ---------- the game's palette ----------
 \definecolor{PageBG}{HTML}{0B0710}
@@ -130,7 +130,7 @@
 
 {\sffamily\footnotesize\bfseries\color{Coral}A MONSTER GAME THAT HAPPENS TO TEACH\par}
 \vspace{0.45cm}
-{\sffamily\fontsize{44}{46}\selectfont\bfseries\color{Gold}GEMMA\\MONSTERS\par}
+{\sffamily\fontsize{44}{46}\selectfont\bfseries\color{Gold}PROMETHEUS\\CITADEL\par}
 \vspace{0.55cm}
 {\Large\color{Cream}Five monsters hold a citadel. Each one feeds on a
 different way of being wrong.\par}
@@ -151,9 +151,12 @@ You win by proving yours no longer works on you.
 \begin{tabularx}{\textwidth}{@{}>{\sffamily\bfseries\color{Coral}}l X@{}}
 What it is & An offline game for Ontario's Grade 9 EQAO mathematics\\
            & assessment\\[0.4em]
-Where it runs & One laptop. \themodel\ served locally through Ollama\\[0.4em]
-Event & Build with AI --- \themodel\ Hackathon, GDG Windsor\\[0.4em]
-Track & Edge / On-Device\\[0.4em]
+Where it runs & A Streamlit web app, deployed online. \themodel\ is called
+               over the network via the OpenAI API\\[0.4em]
+Event & Originally built for Build with AI --- Gemma Hackathon, GDG Windsor\\[0.4em]
+Track & \emph{Originally} Edge / On-Device --- the project has since moved
+        from a locally-served model to a cloud API, so this track claim
+        needs re-confirming with organisers before submission\\[0.4em]
 Team & Gokulakrishnan, Padmanabha, Taha, Naimah, Amarah\\
 \end{tabularx}
 
@@ -168,8 +171,9 @@ $\cdot$ POLYGOR $\cdot$ LEDGERLING\par}
 \vfill
 {\color{Muted}\hrule height 0.4pt}
 \vspace{0.5em}
-{\small\color{Muted}No account. No internet during play. Nothing a student
-writes ever leaves the machine.\par}
+{\small\color{Muted}No account needed. An internet connection is required
+during play: quiz answers and typed reasoning are sent to OpenAI's servers as
+part of each \themodel\ call.\par}
 \end{titlepage}
 
 % =====================================================================
@@ -478,7 +482,7 @@ all, code checks there is any mathematics in the sentence: type
 \job{5 -- It chooses the next approach, and says why}{When an explanation does
 not land, repeating it louder is useless. There are four ways of explaining in
 this game, fixed in code: direct correction, a concrete model walked through,
-the wrong method beside the right one, and an everyday analogy. Gemma reads what
+the wrong method beside the right one, and an everyday analogy. \themodel\ reads what
 you typed and picks which of the \emph{remaining} ones to try, and writes one
 sentence saying why --- which you then see, so the choice is visible rather than
 silent. If it names something that is not on the list, or the reply is unusable,
@@ -487,7 +491,7 @@ route. It cannot invent a destination, go backwards, or stall.}
 
 \job{6 -- It writes a fresh question when the vault is out}{The vault goes
 first, always, because a verified question carries a verified key. When nothing
-is left on your exact idea, Gemma writes one --- modelled on the question you
+is left on your exact idea, \themodel\ writes one --- modelled on the question you
 actually missed, with the answer you actually chose in the prompt, so the new
 question is the same kind of question with different numbers rather than a
 loosely related one. It also has to declare which idea it is aiming at, and code
@@ -518,7 +522,7 @@ all.
 
 \smallskip\noindent One decision is deliberately \emph{not} the model's. Whether
 the Collector arrives is a hard rule: every teaching approach spent, or four
-check questions used, or the model-call budget reached. Gemma cannot summon him,
+check questions used, or the model-call budget reached. \themodel\ cannot summon him,
 cannot delay him, and cannot argue him away. The stakes of this game are set by
 code, and only the path through it is judged.}
 
@@ -528,7 +532,7 @@ history: the ideas you have beaten, the monsters you have put down, your last
 score, how many times you have walked into this particular fight --- and how
 many times you have walked out of it. Retreating from a battle is free and costs
 you nothing, but the citadel counts it, and the monster brings it up when you
-come back. Gemma writes that line from the facts code assembles; it is told not
+come back. \themodel\ writes that line from the facts code assembles; it is told not
 to invent history, and if it fails or produces nothing usable, a line built
 straight from the same facts is used instead. It also answers your typed
 reasoning in character, and names the relic you win. None of it touches your
@@ -537,7 +541,7 @@ in the game.}
 
 \job{10 -- It writes the note that goes home}{The facts of the evening are
 counted by code: the score, the idea that caught you most, which approaches were
-tried and in what order, how many follow-ups you got right. Gemma turns that
+tried and in what order, how many follow-ups you got right. \themodel\ turns that
 into a warm note a parent can act on, with three things to try at the kitchen
 table, and on a hand-off it is told which approaches already failed so it does
 not suggest them straight back. On the progress page the rule is stricter still
@@ -561,7 +565,7 @@ ends and it writes home (10).
 passes through a single function. That is why the caps can be counted at all.
 It is why the whole app moves to a bigger or a smaller \themodel\ by changing
 one environment variable, with nothing else to edit. And it is why a model that
-is slow, busy, or simply not installed makes the game go quiet rather than
+is slow, busy, or has no API key configured makes the game go quiet rather than
 crash --- the door hands back clearly marked placeholder text, and the battle,
 the marking and the vault carry on without it.
 \end{quietbox}
@@ -763,21 +767,21 @@ on screen. If it cannot fill ten, the sheet comes out short. It never comes out
 with a question we could not verify.
 
 % =====================================================================
-\section{It really runs, and it runs on one laptop}
+\section{It really runs, deployed online}
 
 \begin{center}
 \begin{adjustbox}{max width=\textwidth}
 \begin{tikzpicture}[node distance=6mm]
   \node[box, text width=34mm] (ui) {The game\\{\scriptsize\color{Muted}Streamlit + three.js}};
   \node[gld, right=10mm of ui, text width=34mm] (door) {One door\\{\scriptsize\color{Muted}every prompt, every reply}};
-  \node[cool, right=10mm of door, text width=34mm] (model) {\themodel\\{\scriptsize\color{Muted}Ollama, localhost}};
   \node[box, below=8mm of door, text width=34mm] (vault) {The vault\\{\scriptsize\color{Muted}55 verified questions}};
+  \node[cool, right=22mm of door, text width=34mm] (model) {\themodel\\{\scriptsize\color{Muted}OpenAI API, cloud}};
   \draw[arrow] (ui)--(door);
   \draw[arrowcool] (door)--(model);
   \draw[arrow] (ui.south) |- (vault.west);
   \node[draw=Coral, line width=1pt, rounded corners=2.5mm,
-        fit=(ui)(door)(model)(vault), inner sep=6mm] (laptop) {};
-  \node[tag, text=Coral, above=1mm of laptop.north] {ONE LAPTOP --- NOTHING CROSSES THIS LINE};
+        fit=(ui)(door)(vault), inner sep=6mm] (server) {};
+  \node[tag, text=Coral, above=1mm of server.north] {SERVER --- ONE NETWORK CALL LEAVES HERE};
 \end{tikzpicture}
 \end{adjustbox}
 \end{center}
@@ -788,14 +792,21 @@ the citadel you can orbit, five monster halls, the training loop, the Collector
 and his three lieutenants, the notes home and the printable sheets, and the
 gate that opens when the last seal breaks.
 
-No account. No sign-in. No internet needed once it is installed. Three.js is
-vendored into the repository, the monster models are CC0, the audio is ours,
-and there is not a single request to a CDN. A fourteen-year-old's worked-out
-mistakes are exactly the kind of thing that should not be uploaded anywhere, so
-they are not. They stay in a file on the family's own machine.
+No account, no sign-in. Three.js is still vendored into the repository, the
+monster models are still CC0, the audio is still ours --- none of the game's
+own assets are pulled from a CDN. But this is no longer an offline claim: an
+internet connection is required to play, because every \themodel\ call ---
+the lesson, the hint, the reasoning judgement, the letter home --- travels to
+OpenAI's servers and back. A fourteen-year-old's typed answer and their typed
+reasoning are part of that traffic. That trade-off bought something real: the
+game runs anywhere a browser can reach it, with no local model to install and
+no laptop-class GPU required to serve it. It also means the strongest privacy
+claim this brief could once make --- that nothing a student writes leaves the
+machine --- no longer holds, and should not be repeated in front of judges.
 
-And if \themodel\ is not installed at all, the app still opens, still runs the
-quiz, still marks it, and says plainly where the writing would have been.
+And if \themodel's API key is missing or a call fails, the app still opens,
+still runs the quiz, still marks it, and says plainly where the writing would
+have been.
 
 % =====================================================================
 \vfill
@@ -804,8 +815,8 @@ quiz, still marks it, and says plainly where the writing would have been.
 \begin{center}
 {\sffamily\small\bfseries\color{Coral}Gokulakrishnan $\cdot$ Padmanabha $\cdot$
 Taha $\cdot$ Naimah $\cdot$ Amarah}\\[0.3em]
-{\small\color{Muted}Build with AI --- \themodel\ Hackathon $\cdot$ GDG Windsor
-$\cdot$ Edge / On-Device}
+{\small\color{Muted}Originally built for Build with AI --- Gemma Hackathon
+$\cdot$ GDG Windsor $\cdot$ Edge / On-Device --- track claim now under review}
 \end{center}
 
 \end{document}

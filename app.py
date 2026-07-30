@@ -1422,36 +1422,54 @@ _PHONE_JS = r"""
   };
   G.isPhone = function(){ var s=G.parentSize(); return s.w>0 && s.w<=PHONE_MAX; };
 
-  /* Give this scene's own iframe a height that suits the phone screen.
+  /* Give this scene's own iframe a height that suits the real screen.
      reserve = the Streamlit controls that must stay visible underneath it, in
      pixels, or 'auto' to measure whatever the parent page holds besides this
      frame (right when the tail is a couple of buttons, wrong when the tail is
      a whole article - those stages pass 0 and let the article scroll).
-     Desktop keeps the fixed height Python asked for. */
+     A phone always fits itself to the actual viewport height. Desktop keeps
+     the fixed height Python asked for UNLESS the browser window is shorter
+     than that (a small laptop, a window that isn't maximized, or the page
+     viewed at 100% browser zoom on a display where that leaves less room
+     than the design assumed) - then it shrinks to fit too, exactly like a
+     phone, so nothing is ever taller than what is actually on screen and the
+     player never has to zoom the browser out to see the whole scene. It
+     never grows a scene past the height Python asked for, so a roomy desktop
+     window still looks exactly as designed. */
   G.fitFrame = function(reserve, minH){
     // A scene may lock its own height (e.g. once a battle ends and it has
     // collapsed to its result) so that a stray resize - the mobile address bar
     // sliding away as the page scrolls - cannot re-inflate it to full screen.
     if(window.__gwbFrameLock) return false;
     var s=G.parentSize();
-    if(!s.w || s.w>PHONE_MAX) return false;
+    if(!s.w || !s.h) return false;
+    var fe=window.frameElement; if(!fe) return false;
+    var isPhoneW = s.w<=PHONE_MAX;
     if(reserve === 'auto'){
       reserve = 0;
       try{
         // the block container is content-sized, unlike documentElement, whose
         // scrollHeight never falls below the viewport and would read as a tail
-        var fe0=window.frameElement;
         var mb=window.parent.document.querySelector(
           '[data-testid="stMainBlockContainer"]');
-        if(fe0 && mb) reserve=Math.max(0, Math.round(
-          mb.getBoundingClientRect().height - fe0.getBoundingClientRect().height));
+        if(mb) reserve=Math.max(0, Math.round(
+          mb.getBoundingClientRect().height - fe.getBoundingClientRect().height));
       }catch(e){}
     }
+    // Remember the height Python originally asked for, once, before this
+    // function ever rewrites it - that is the ceiling a desktop scene should
+    // never be stretched past, even though it is free to shrink below it.
+    if(fe.dataset.gwbOrigH===undefined){
+      var oh0=parseFloat(fe.getAttribute('height')||fe.style.height);
+      fe.dataset.gwbOrigH = oh0 ? oh0 : s.h;
+    }
+    var origH=parseFloat(fe.dataset.gwbOrigH)||s.h;
     // the viewport always wins: a floor taller than the screen (a phone held
-    // sideways) would push the scene's own controls below the fold
-    var h=Math.min(s.h, Math.max(minH||340, Math.round(s.h-(reserve||0))));
+    // sideways, or a short desktop window) would push the scene's own
+    // controls below the fold
+    var avail=Math.max(minH||340, Math.round(s.h-(reserve||0)));
+    var h = isPhoneW ? Math.min(s.h, avail) : Math.min(origH, s.h, avail);
     try{
-      var fe=window.frameElement; if(!fe) return false;
       fe.style.height=h+'px'; fe.setAttribute('height', h);
       // Streamlit also pins the wrapper's height, as a flex-basis in a
       // generated class, so the block below the scene would otherwise stay
