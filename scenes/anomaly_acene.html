@@ -1,191 +1,127 @@
 <!--
-  Prometheus Lab 3D Scene — vacuum_box Anomaly.
+  Prometheus Lab 3D Scene — GENERIC anomaly reaction template.
 
-  WHAT THIS FILE IS:
-  A completely self-contained HTML page. It is NOT a normal part of the
-  Streamlit app's UI -- Streamlit will load this whole file inside an
-  <iframe> (a "page inside a page") using components.v1.html(). That's
-  why this file has its own <html>, <head>, and <body> tags, its own
-  <style>, and (as of this milestone) no <script src> at all -- Three.js
-  is now inlined by ui/scene_viewer.py from the vendored copy in
-  static/vendor/, the same way boot.html and command_center.html already
-  work. There must NEVER be a CDN link (e.g. cdnjs) in this project.
+  MILESTONE 4: generalized from the original vacuum_box-only file into a
+  reusable template for ALL anomalies. The camera/lighting/fog rig and the
+  resolved/thin/wrong reaction TIMING+FEEL are unchanged from the original
+  vacuum_box scene. What's now a parameter (filled in by
+  ui/focal_objects.py + ui/scene_viewer.py before this file is sent to the
+  browser):
+    __ACCENT_HEX_JS__   e.g. 0x2dd6e0 — this chapter's accent, used for the
+                         accent light + the "resolved" flash/glow color.
+    __ACCENT_HEX_CSS__  e.g. "#2dd6e0" — same color as a CSS string.
+    __FOCAL_SETUP_JS__  builds this anomaly's focal object(s) into
+                         `focalGroup`, and pushes every MeshStandardMaterial
+                         that should glow on reaction into `reactiveMeshes`.
+    __IDLE_TICK_JS__    this anomaly's own idle motion, run once per frame.
+    __REACTION_VERDICT__ same as before: "resolved" / "thin" / "wrong" / "".
 
-  LIVE REACTIONS (this milestone):
-  ui/scene_viewer.py replaces the text __REACTION_VERDICT__ below with one
-  of: "resolved", "thin", "wrong", or "" (no submission yet / neutral).
-  Reading that baked-in value on load is enough -- Streamlit re-runs the
-  whole page (and this component re-renders fresh) on every Submit click,
-  so a new verdict always arrives as a fresh page load, no live messaging
-  between Python and the iframe is needed.
-    - "resolved": box calms -- fog thins, the accent point light brightens,
-      the idle drift/tumble slows down, and it settles there (stable).
-    - "thin" / "wrong": a brief shudder/flicker + fog thickening for about
-      1.5s, then eases back to the neutral baseline. Reads as an urgent
-      nudge, not a punishment -- no red "fail" screen, no shaming text.
-    - "" (neutral): just the original idle drift/tumble, unchanged.
+  Still no CDN — Three.js/GSAP are inlined by scene_viewer.py from
+  static/vendor/, and there's still no live Python<->iframe messaging: a
+  new verdict always arrives as a fresh page load on the next Streamlit
+  rerun, so baking it in once on load is enough.
+    - "resolved": reactiveMeshes glow toward this chapter's accent color,
+      the accent light brightens, fog thins, motion eases to a calm drift.
+    - "thin"/"wrong": a brief amber shudder (shared warning color, not
+      chapter-specific — reads as a nudge, not a fail state) + fog
+      thickening, then eases back to neutral by ~1.5s.
+    - "" (neutral): just this anomaly's own idle motion, unchanged.
 -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
-    /* Fill the entire iframe with a dark, space-like background so
-       there's no white flash/border around the 3D canvas. */
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #05080a;
-    }
-    canvas {
-      display: block;
-    }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05080a; }
+    canvas { display:block; }
   </style>
 </head>
 <body>
-  <!-- Full-iframe color-flash overlay, on top of the 3D canvas. This is a
-       deliberate belt-and-suspenders addition: on its own, tweening 3D fog/
-       light values can be too subtle to read at a glance, so this gives
-       every reaction one guaranteed-visible moment regardless of camera
-       distance or lighting angle. -->
   <div id="reactionFlash" style="
     position:fixed; inset:0; pointer-events:none; z-index:10;
     background:radial-gradient(circle at 50% 55%, transparent 35%, currentColor 145%);
     opacity:0; color:#2dd6e0;
   "></div>
   <script>
-    // Three.js (r128) and GSAP are inlined by ui/scene_viewer.py ahead of
-    // this <script> block, from the vendored copies in static/vendor/ --
-    // no CDN, matching boot.html / command_center.html.
     const REACTION_VERDICT = "__REACTION_VERDICT__"; // resolved | thin | wrong | ""
+    const ACCENT_HEX = __ACCENT_HEX_JS__;
+    const ACCENT_CSS = "__ACCENT_HEX_CSS__";
     const flashEl = document.getElementById("reactionFlash");
-    // ---- 1. SCENE ---------------------------------------------------
-    // An empty 3D stage. We also give it a background color that matches
-    // the dark "diagnostic terminal" theme used everywhere else in the app.
+
+    // ---- 1. SCENE / CAMERA / RENDERER (identical rig for every anomaly) --
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05080a);
-    // Base/neutral fog density -- reactions below tween away from and
-    // back to this value. Same recipe (FogExp2) as boot.html / command_center.html.
     const BASE_FOG_DENSITY = 0.035;
     scene.fog = new THREE.FogExp2(0x05080a, BASE_FOG_DENSITY);
 
-    // ---- 2. CAMERA ----------------------------------------------------
-    // A "PerspectiveCamera" sees the world the way a human eye/real camera
-    // does (things farther away look smaller). The three numbers are:
-    // field of view in degrees, aspect ratio (width/height of the view),
-    // and the near/far clipping distances (how close/far it can "see").
-    const camera = new THREE.PerspectiveCamera(
-      50,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      100
-    );
-    // Move the camera back and up a bit, then angle it down at the box,
-    // so we get a clear three-quarter view instead of staring flat-on.
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(3, 2, 5);
     camera.lookAt(0, 0, 0);
 
-    // ---- 3. RENDERER ----------------------------------------------------
-    // This is what actually draws the scene, through the camera, onto a
-    // <canvas> element that it creates and adds to the page for us.
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     if (renderer.outputEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
     if (THREE.ACESFilmicToneMapping) renderer.toneMapping = THREE.ACESFilmicToneMapping;
     document.body.appendChild(renderer.domElement);
 
-    // ---- The box itself -------------------------------------------------
-    // A BoxGeometry is the box's literal shape (1x1x1 units). A
-    // MeshStandardMaterial is the "skin" -- how it reacts to light,
-    // which is why we picked a material that actually needs lighting
-    // (a flat/unlit material would look the same everywhere and give no
-    // sense of shape). Cyan tone to match the app's accent color.
-    const geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x2dd6e0,
-      metalness: 0.3,
-      roughness: 0.4,
-      emissive: 0x000000,
-      emissiveIntensity: 1,
-    });
-    const box = new THREE.Mesh(geometry, material);
-    scene.add(box);
-
-    // ---- Lighting -------------------------------------------------------
-    // Without any light, a MeshStandardMaterial renders pure black --
-    // this is the single most common "why is my Three.js scene empty"
-    // mistake, so this scene deliberately uses two lights:
-    //   1. An ambient light -- soft light with no direction, coming from
-    //      "everywhere" evenly, so no side of the box is ever pitch black.
-    //   2. A directional light -- like sunlight, coming from one angle,
-    //      which is what actually makes the box look like a 3D shape by
-    //      putting a bright side and a shadowed side on it.
+    // ---- Lighting (identical rig, accent color now parametrized) --------
     const ambientLight = new THREE.AmbientLight(0x445566, 1.2);
     scene.add(ambientLight);
-
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
     keyLight.position.set(4, 5, 3);
     scene.add(keyLight);
-
-    // Accent point light (cyan, Chapter 1 color) from the opposite side, so
-    // the shadowed face of the box isn't a flat silhouette. This is also
-    // the light the reaction states below brighten/flicker to sell the
-    // "resolved" / "thin"/"wrong" moments.
     const BASE_ACCENT_INTENSITY = 0.9;
-    const accentLight = new THREE.PointLight(0x2dd6e0, BASE_ACCENT_INTENSITY, 10);
+    const accentLight = new THREE.PointLight(ACCENT_HEX, BASE_ACCENT_INTENSITY, 10);
     accentLight.position.set(-3, -1, 2.5);
     scene.add(accentLight);
+    const accentColor = new THREE.Color(ACCENT_HEX);
 
-    // ---- Live Reactions ---------------------------------------------------
-    // reactionState.speed multiplies the idle rotation speed in the animate
-    // loop below (1 = normal, <1 = calmer, >1 = agitated). GSAP tweens it
-    // and the fog/light values smoothly instead of snapping instantly.
+    // ---- 2. FOCAL OBJECT (per-anomaly, see ui/focal_objects.py) ---------
+    const focalGroup = new THREE.Group();
+    scene.add(focalGroup);
+    const reactiveMeshes = []; // MeshStandardMaterials that glow on reaction
+    __FOCAL_SETUP_JS__
+
+    // ---- 3. Live Reactions (generic — same timing/feel as the original
+    // vacuum_box scene, now driven by reactiveMeshes[] + focalGroup instead
+    // of one hardcoded box/material) ---------------------------------------
     const reactionState = { speed: 1 };
 
     function stabilize() {
-      // "resolved": one confirming glow pulse (material + screen flash +
-      // gentle scale breathe), accent light brightens and holds, fog
-      // thins noticeably, motion eases down to a slow, calm drift.
-      flashEl.style.color = "#2dd6e0";
+      flashEl.style.color = ACCENT_CSS;
       gsap.fromTo(flashEl, { opacity: 0 }, { opacity: 0.45, duration: 0.25, yoyo: true, repeat: 1, ease: "power1.inOut" });
-      gsap.fromTo(material.emissive, { r: 0, g: 0, b: 0 }, {
-        r: 0.05, g: 0.55, b: 0.58, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut",
+      reactiveMeshes.forEach((mat) => {
+        gsap.fromTo(mat.emissive, { r: 0, g: 0, b: 0 }, {
+          r: accentColor.r * 0.9, g: accentColor.g * 0.9, b: accentColor.b * 0.9,
+          duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut",
+        });
       });
-      gsap.to(box.scale, { x: 1.18, y: 1.18, z: 1.18, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut" });
+      gsap.to(focalGroup.scale, { x: 1.12, y: 1.12, z: 1.12, duration: 0.35, yoyo: true, repeat: 1, ease: "power1.inOut" });
       gsap.to(scene.fog, { density: BASE_FOG_DENSITY * 0.25, duration: 1.2, ease: "power2.out" });
       gsap.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 3.2, duration: 0.5, ease: "power2.out" });
       gsap.to(reactionState, { speed: 0.15, duration: 1.2, ease: "power2.out" });
     }
 
     function destabilize() {
-      // "thin"/"wrong": an urgent amber shudder -- box jitters in position
-      // and rotation, material flickers amber, screen flashes amber, fog
-      // thickens -- then everything eases back to the neutral baseline by
-      // ~1.5s. Amber (this app's existing "warning" color), not red, and
-      // no "fail" text -- reads as a nudge, not a punishment.
       flashEl.style.color = "#fbbf24";
-      const baseX = box.position.x, baseZ = box.position.z;
+      const baseX = focalGroup.position.x, baseZ = focalGroup.position.z;
       const shudder = gsap.timeline();
       shudder.to(flashEl, { opacity: 0.4, duration: 0.08, repeat: 3, yoyo: true }, 0);
-      shudder.to(material.emissive, { r: 0.6, g: 0.35, b: 0, duration: 0.08, repeat: 3, yoyo: true }, 0);
+      reactiveMeshes.forEach((mat) => {
+        shudder.to(mat.emissive, { r: 0.6, g: 0.35, b: 0, duration: 0.08, repeat: 3, yoyo: true }, 0);
+      });
       shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY * 0.2, duration: 0.08, repeat: 3, yoyo: true }, 0);
       shudder.to(scene.fog, { density: BASE_FOG_DENSITY * 2.4, duration: 0.15 }, 0);
-      shudder.to(box.rotation, {
-        z: box.rotation.z + 0.28, duration: 0.07, repeat: 6, yoyo: true, ease: "power1.inOut",
-      }, 0);
-      shudder.to(box.position, {
-        x: baseX + 0.15, z: baseZ + 0.1, duration: 0.06, repeat: 6, yoyo: true, ease: "power1.inOut",
-      }, 0);
+      shudder.to(focalGroup.rotation, { z: focalGroup.rotation.z + 0.28, duration: 0.07, repeat: 6, yoyo: true, ease: "power1.inOut" }, 0);
+      shudder.to(focalGroup.position, { x: baseX + 0.15, z: baseZ + 0.1, duration: 0.06, repeat: 6, yoyo: true, ease: "power1.inOut" }, 0);
       shudder.to(reactionState, { speed: 2.2, duration: 0.15 }, 0);
-      // Settle back to the neutral baseline by ~1.5s total.
       shudder.to(flashEl, { opacity: 0, duration: 1.0, ease: "power2.out" }, 0.5);
-      shudder.to(material.emissive, { r: 0, g: 0, b: 0, duration: 1.0, ease: "power2.out" }, 0.5);
+      reactiveMeshes.forEach((mat) => {
+        shudder.to(mat.emissive, { r: 0, g: 0, b: 0, duration: 1.0, ease: "power2.out" }, 0.5);
+      });
       shudder.to(scene.fog, { density: BASE_FOG_DENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(accentLight, { intensity: BASE_ACCENT_INTENSITY, duration: 1.0, ease: "power2.out" }, 0.5);
-      shudder.to(box.position, { x: baseX, z: baseZ, duration: 1.0, ease: "power2.out" }, 0.5);
+      shudder.to(focalGroup.position, { x: baseX, z: baseZ, duration: 1.0, ease: "power2.out" }, 0.5);
       shudder.to(reactionState, { speed: 1, duration: 1.0, ease: "power2.out" }, 0.5);
     }
 
@@ -194,51 +130,20 @@
     } else if (REACTION_VERDICT === "thin" || REACTION_VERDICT === "wrong") {
       destabilize();
     }
-    // REACTION_VERDICT === "" (no submission yet): stays neutral, no call.
 
-    // ---- Phase 7b: Animation loop -----------------------------------------
-    // Browsers can't run our code and repaint the screen at the same time --
-    // requestAnimationFrame(fn) asks the browser "call fn right before your
-    // next repaint," which is why it's used instead of e.g. calling render()
-    // on a setInterval timer: it stays in sync with the screen's own refresh
-    // rate (usually 60 times/second), so motion looks smooth and doesn't
-    // waste work drawing frames the screen isn't ready to show yet.
-    const baseY = box.position.y;
+    // ---- 4. Animation loop (idle motion is per-anomaly) ------------------
     function animate() {
       requestAnimationFrame(animate);
-
-      // Slow tumble: tiny angle added every frame, forever. Scaled by
-      // reactionState.speed so verdicts can calm or agitate the motion.
-      box.rotation.y += 0.0035 * reactionState.speed;
-      box.rotation.x += 0.0015 * reactionState.speed;
-
-      // Gentle up/down drift using a sine wave, so it eases back and forth
-      // rather than moving at a constant speed like a bouncing ball would.
-      box.position.y = baseY + Math.sin(Date.now() * 0.0006) * 0.12;
-
+      __IDLE_TICK_JS__
       renderer.render(scene, camera);
     }
     animate();
 
-    // ---- Keep it looking right if the iframe itself gets resized -------
-    // No renderer.render() call is needed here anymore -- the animate()
-    // loop above already redraws every frame on its own, so it will pick
-    // up the new size/aspect on its very next frame automatically.
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>
-
-  <!--
-    Note: the old browser-side "did the CDN fail" check (a setTimeout
-    that looked for `THREE === undefined`) is gone -- Three.js is now
-    inlined synchronously by ui/scene_viewer.py from static/vendor/, the
-    same as boot.html/command_center.html, so it's never fetched over the
-    network from inside this iframe and can't fail that way anymore. The
-    remaining fallback (file missing/unreadable/empty) is still handled
-    Python-side, in scene_viewer.py's try/except.
-  -->
 </body>
 </html>

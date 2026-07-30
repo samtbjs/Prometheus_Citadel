@@ -201,14 +201,12 @@ questions = anomaly["questions"]
 st.caption(anomaly["description"])
 
 # -----------------------------------------------------------------------
-# PHASE 7a: a single, STATIC (not yet animated) Three.js 3D scene, shown
-# only for the "vacuum_box" Anomaly, above the question/readout card
-# below. sinking_stone and hot_cold_chairs are untouched and show no
-# scene at all. Animation (7b) and fallback/error-handling (7c) are
-# deliberately NOT part of this step -- see ui/scene_viewer.py.
+# MILESTONE 4: every Anomaly now has its own live 3D reaction scene (was
+# vacuum_box-only through Milestone 3). render_anomaly_scene() picks the
+# right focal object + chapter accent color for selected_id -- see
+# ui/focal_objects.py and ui/scene_viewer.py.
 # -----------------------------------------------------------------------
-if selected_id == "vacuum_box":
-    render_anomaly_scene(verdict=st.session_state.last_verdict)
+render_anomaly_scene(anomaly_id=selected_id, verdict=st.session_state.last_verdict)
 
 # -----------------------------------------------------------------------
 # Redraw any messages saved from the last Submit click, each with its own

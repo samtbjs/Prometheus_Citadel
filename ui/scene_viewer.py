@@ -15,6 +15,9 @@ import os
 
 import streamlit.components.v1 as components
 
+import ui.design_tokens as tokens
+from ui.focal_objects import FOCAL_OBJECT_CONFIG
+
 _THIS_FILE_DIR = os.path.dirname(os.path.abspath(__file__))       # .../prometheus_lab/ui
 _PROJECT_ROOT = os.path.dirname(_THIS_FILE_DIR)                    # .../prometheus_lab
 SCENE_FILE_PATH = os.path.join(_PROJECT_ROOT, "scenes", "anomaly_acene.html")
@@ -28,13 +31,15 @@ SCENE_HEIGHT_PX = 420
 FORCE_FALLBACK_FOR_TESTING = False
 
 
-def _render_2d_fallback():
+def _render_2d_fallback(description_text):
     """Shows the same dark/cyan "diagnostic terminal" styled 2D card as
     the JS-side fallback in anomaly_acene.html, but built with Streamlit
     markdown/CSS instead -- this copy is needed because this path runs
-    when we never even got as far as handing anything to the browser."""
+    when we never even got as far as handing anything to the browser.
+    MILESTONE 4: description_text is now passed in per-anomaly instead of
+    being hardcoded to vacuum_box's description."""
     components.html(
-        """
+        f"""
         <div style="
             display:flex; align-items:center; justify-content:center;
             width:100%; height:100%; box-sizing:border-box; padding:24px;
@@ -48,7 +53,7 @@ def _render_2d_fallback():
               [ 3D VISUAL FEED OFFLINE ]
             </div>
             <div style="color:#8aa0aa; font-size:14px; line-height:1.5;">
-              A box floats motionless in a vacuum chamber, with nothing touching it.
+              {description_text}
             </div>
           </div>
         </div>
@@ -174,19 +179,31 @@ def render_command_center_scene(stations=None):
     components.html(full_html, height=420)
 
 
-def render_anomaly_scene(verdict=None):
-    """Read scenes/anomaly_acene.html and render it as a live 3D scene,
-    falling back to a 2D description if the file can't be read for any
-    reason. See module docstring for the two failure modes this covers.
+def render_anomaly_scene(anomaly_id, verdict=None):
+    """Read scenes/anomaly_acene.html (the GENERIC reaction template, as of
+    Milestone 4) and render it as a live 3D scene for the given anomaly_id,
+    falling back to a 2D description if anything can't be read. See module
+    docstring for the failure modes this covers.
 
+    anomaly_id: one of the keys in ui/focal_objects.py's FOCAL_OBJECT_CONFIG
+        (vacuum_box, sinking_stone, hot_cold_chairs, gps_clock_drift). Picks
+        which focal object + idle motion + chapter accent color get baked
+        into the shared template.
     verdict: one of "resolved" / "thin" / "wrong" / None. None means "no
-    submission yet this visit" -- the scene stays neutral (just the idle
-    drift/tumble). Baked into the HTML as a JS constant the scene reads
-    on load; see scenes/anomaly_acene.html's "LIVE REACTIONS" note for why
-    this doesn't need any live Python<->iframe messaging.
+        submission yet this visit" -- the scene stays neutral (just the
+        idle motion). Baked into the HTML as a JS constant the scene reads
+        on load; see scenes/anomaly_acene.html's header note for why this
+        doesn't need any live Python<->iframe messaging.
     """
+    config = FOCAL_OBJECT_CONFIG.get(anomaly_id)
+    if config is None:
+        # No live scene defined for this anomaly (shouldn't happen for the
+        # 4 current anomalies, but never blank the screen if it does).
+        _render_2d_fallback("No visual feed is configured for this anomaly yet.")
+        return
+
     if FORCE_FALLBACK_FOR_TESTING:
-        _render_2d_fallback()
+        _render_2d_fallback(config["fallback_text"])
         return
 
     try:
@@ -197,9 +214,14 @@ def render_anomaly_scene(verdict=None):
         if not (three_js.strip() and gsap_js.strip() and scene_html.strip()):
             raise ValueError("One or more scene assets are empty.")
     except (OSError, ValueError):
-        _render_2d_fallback()
+        _render_2d_fallback(config["fallback_text"])
         return
 
+    accent_hex = getattr(tokens, config["accent_token"])  # e.g. "#2dd6e0"
     scene_html = scene_html.replace("__REACTION_VERDICT__", verdict or "")
+    scene_html = scene_html.replace("__ACCENT_HEX_JS__", "0x" + accent_hex.lstrip("#"))
+    scene_html = scene_html.replace("__ACCENT_HEX_CSS__", accent_hex)
+    scene_html = scene_html.replace("__FOCAL_SETUP_JS__", config["focal_setup_js"])
+    scene_html = scene_html.replace("__IDLE_TICK_JS__", config["idle_tick_js"])
     full_html = f"<script>{three_js}</script><script>{gsap_js}</script>" + scene_html
     components.html(full_html, height=SCENE_HEIGHT_PX)
